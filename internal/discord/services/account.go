@@ -101,8 +101,20 @@ func (s *AccountService) GetTrackedAccounts(ctx context.Context, discordUserID s
 }
 
 func (s *AccountService) ExitCompetition(ctx context.Context, discordUserID, guildID string) error {
+	accounts, err := s.store.GetAccountsByDiscordID(ctx, discordUserID)
+	if err != nil {
+		return fmt.Errorf("failed to get accounts: %w", err)
+	}
+
+	for _, account := range accounts {
+		if err := s.store.DeleteAccount(ctx, account.ID); err != nil {
+			return fmt.Errorf("failed to delete account: %w", err)
+		}
+	}
+
 	if err := s.store.DeleteParticipant(ctx, discordUserID, guildID); err != nil {
 		return fmt.Errorf("failed to exit competition: %w", err)
 	}
+	
 	return nil
 }
