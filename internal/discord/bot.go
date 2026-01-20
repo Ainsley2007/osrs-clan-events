@@ -14,6 +14,7 @@ type Bot struct {
 	Session            *discordgo.Session
 	Store              database.Store
 	GuildService       *services.GuildService
+	AccountService     *services.AccountService
 	InitializerService *services.InitializerService
 	Handlers           map[string]Command
 }
@@ -25,9 +26,10 @@ func New(token string, store database.Store) (*Bot, error) {
 	}
 
 	bot := &Bot{
-		Session:      dg,
-		Store:        store,
-		GuildService: services.NewGuildService(store),
+		Session:        dg,
+		Store:          store,
+		GuildService:   services.NewGuildService(store),
+		AccountService: services.NewAccountService(store),
 	}
 
 	bot.InitializerService = services.NewInitializerService(dg, store)

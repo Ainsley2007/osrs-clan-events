@@ -173,6 +173,12 @@ func (s *SQLiteStore) GetParticipant(ctx context.Context, discordUserID, guildID
 	return &p, err
 }
 
+func (s *SQLiteStore) DeleteParticipant(ctx context.Context, discordUserID, guildID string) error {
+	query := `DELETE FROM participants WHERE discord_user_id = ? AND guild_id = ?`
+	_, err := s.db.ExecContext(ctx, query, discordUserID, guildID)
+	return err
+}
+
 // Accounts
 func (s *SQLiteStore) SaveAccount(ctx context.Context, acc *Account) error {
 	if acc.ID == 0 {
@@ -242,6 +248,32 @@ func (s *SQLiteStore) GetActiveAccounts(ctx context.Context) ([]*Account, error)
 		accounts = append(accounts, &acc)
 	}
 	return accounts, rows.Err()
+}
+
+func (s *SQLiteStore) GetAccountByRSN(ctx context.Context, rsn, discordUserID string) (*Account, error) {
+	query := `SELECT id, rsn, discord_user_id, error_count, is_active 
+		FROM accounts WHERE LOWER(rsn) = LOWER(?) AND discord_user_id = ?`
+	
+	var acc Account
+	err := s.db.QueryRowContext(ctx, query, rsn, discordUserID).Scan(
+		&acc.ID, &acc.RSN, &acc.DiscordUserID, &acc.ErrorCount, &acc.IsActive,
+	)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("account not found")
+	}
+	return &acc, err
+}
+
+func (s *SQLiteStore) DeleteAccount(ctx context.Context, id int64) error {
+	query := `DELETE FROM accounts WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, id)
+	return err
+}
+
+func (s *SQLiteStore) UpdateAccountRSN(ctx context.Context, id int64, newRSN string) error {
+	query := `UPDATE accounts SET rsn = ? WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, newRSN, id)
+	return err
 }
 
 // Events
