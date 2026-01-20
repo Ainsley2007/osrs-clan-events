@@ -14,10 +14,11 @@ func (b *Bot) renameCommand() Command {
 			Description: "Rename a tracked OSRS account",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "current-rsn",
-					Description: "The current RuneScape username",
-					Required:    true,
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "current-rsn",
+					Description:  "The current RuneScape username",
+					Required:     true,
+					Autocomplete: true,
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionString,

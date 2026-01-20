@@ -14,10 +14,11 @@ func (b *Bot) removeCommand() Command {
 			Description: "Remove an OSRS account from tracking",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "rsn",
-					Description: "The RuneScape username to remove",
-					Required:    true,
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "rsn",
+					Description:  "The RuneScape username to remove",
+					Required:     true,
+					Autocomplete: true,
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionUser,

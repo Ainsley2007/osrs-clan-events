@@ -70,7 +70,56 @@ func (b *Bot) interactionCreate(s *discordgo.Session, i *discordgo.InteractionCr
 		if cmd, ok := b.Handlers[i.ApplicationCommandData().Name]; ok {
 			cmd.Handler(s, i)
 		}
+	} else if i.Type == discordgo.InteractionApplicationCommandAutocomplete {
+		b.handleAutocomplete(s, i)
 	}
+}
+
+func (b *Bot) handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ApplicationCommandData()
+	
+	switch data.Name {
+	case "remove", "rename":
+		b.handleRSNAutocomplete(s, i)
+	}
+}
+
+func (b *Bot) handleRSNAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	ctx := context.Background()
+	
+	userID := i.Member.User.ID
+	if userID == "" && i.User != nil {
+		userID = i.User.ID
+	}
+	
+	accounts, err := b.AccountService.GetTrackedAccounts(ctx, userID)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+			Data: &discordgo.InteractionResponseData{
+				Choices: []*discordgo.ApplicationCommandOptionChoice{},
+			},
+		})
+		return
+	}
+	
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(accounts))
+	for _, acc := range accounts {
+		if len(choices) >= 25 {
+			break
+		}
+		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+			Name:  acc.RSN,
+			Value: acc.RSN,
+		})
+	}
+	
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
+	})
 }
 
 func (b *Bot) guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
