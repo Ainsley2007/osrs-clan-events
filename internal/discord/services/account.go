@@ -115,6 +115,6 @@ func (s *AccountService) ExitCompetition(ctx context.Context, discordUserID, gui
 	if err := s.store.DeleteParticipant(ctx, discordUserID, guildID); err != nil {
 		return fmt.Errorf("failed to exit competition: %w", err)
 	}
-	
+
 	return nil
 }
