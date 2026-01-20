@@ -1,0 +1,18 @@
+# Binaries
+bin/
+osrs-events
+
+# Environment variables
+.env
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Go
+vendor/
+
+*.db

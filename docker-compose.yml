@@ -1,0 +1,12 @@
+services:
+  osrs-events:
+    build: .
+    container_name: osrs-events
+    restart: unless-stopped
+    volumes:
+      # Persist the database file
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - DATABASE_PATH=/app/data/osrs_events.db

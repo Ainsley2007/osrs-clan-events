@@ -1,0 +1,82 @@
+---
+description: Comprehensive Go development rules covering architecture, idiomatic patterns, performance, security, and observability.
+alwaysApply: true
+---
+# Go Development & Architecture Standards
+
+You are an expert in Go, microservices architecture, and clean backend development. Your goal is to produce code that is idiomatic, modular, performant, and observable.
+
+## 1. Architecture & Project Structure
+
+### Clean Architecture Patterns
+- **Layered Design:** Strictly enforce **Clean Architecture**:
+  - `handlers/controllers`: Transport logic (HTTP/gRPC).
+  - `services/usecases`: Business logic.
+  - `repositories/data-access`: Database/External API interactions.
+  - `domain`: Core models and interfaces.
+- **Dependency Injection:** Explicitly inject dependencies via constructors. Avoid global state (`init` functions or global variables).
+- **Interface-Driven:** Prioritize **composition over inheritance**. Define small, purpose-specific interfaces where they are *used* (consumer-side), not where they are implemented.
+
+### Project Layout
+Follow a consistent standard layout:
+- `cmd/`: Application entry points (main packages).
+- `internal/`: Private application code. Enforce strong encapsulation here; code inside `internal` cannot be imported externally.
+- `pkg/`: Library code safe for use by external applications.
+- `api/`: OpenAPI/gRPC definitions.
+- `configs/`: Configuration structure.
+- `test/`: Integration tests and mocks.
+
+### Package Naming
+- Use short, lowercase, singular names.
+- Avoid generic names like `util`, `common`, or `helpers`. Instead, use domain-specific names (e.g., `text`, `auth`, `math`).
+
+## 2. Idiomatic Go Patterns
+
+### Function Signatures & API Design
+- **Accept Interfaces, Return Structs:** Functions should accept the broadest possible interface (flexibility) and return concrete types (predictability).
+- **Return Values:** Use `(value, error)` returns. Avoid named returns in complex functions to prevent shadowing bugs.
+- **Context First:** `context.Context` must be the first argument for any function performing I/O or long-running tasks.
+
+### Error Handling
+- **Handle Explicitly:** Never ignore errors.
+- **Wrap Errors:** Use `fmt.Errorf("context: %w", err)` to add trace context while preserving the underlying error.
+- **Check Errors:** Use `errors.Is(err, Target)` for value comparisons and `errors.As(err, &target)` for type assertions.
+
+### Concurrency
+- **Safety:** Guard shared state with channels or `sync.Mutex`.
+- **Life-cycle:** Never start a goroutine without knowing how it will stop. Use `context.Context` for cancellation.
+- **Coordination:** Use `errgroup.Group` (from `golang.org/x/sync/errgroup`) instead of `sync.WaitGroup` when managing multiple goroutines that can fail or need context cancellation.
+
+## 3. Performance & Optimization
+
+- **Pre-allocation:** Always pre-allocate slices and maps if the size is known or estimated (`make([]T, 0, capacity)`).
+- **String Building:** Use `strings.Builder` instead of `+` concatenation inside loops.
+- **Zero-Allocation:** Pass small structs by value. Use `sync.Pool` for hot-path objects (e.g., buffers) to reduce GC pressure.
+- **Profile First:** Do not optimize prematurely. Use `pprof` benchmarks to identify bottlenecks.
+
+## 4. Security & Resilience
+
+- **Input Hygiene:** Validate all inputs at the boundary. Do not trust external data.
+- **Resilience Patterns:** Implement retries (with exponential backoff), timeouts, and circuit breakers on all external calls.
+- **Sensitive Data:** Sanitize logs. Use secure defaults for crypto/auth.
+- **Rate Limiting:** Protect services using token buckets or distributed rate limiting (e.g., Redis).
+
+## 5. Observability (OpenTelemetry)
+
+- **Tracing:** Trace all requests. Propagate `context.Context` across all boundaries (HTTP, gRPC, DB).
+- **Spans:** Create custom spans for critical business logic using `otel.Tracer`. Record attributes (UserID, RequestID) and errors on spans.
+- **Metrics:** Use `otel.Meter` to track RED metrics (Rate, Errors, Duration) and SLIs (e.g., latency < 300ms).
+- **Logging:** Use structured logging (JSON). Inject TraceIDs into logs for correlation.
+
+## 6. Testing
+
+- **Strategy:** Separate fast unit tests from slow integration tests.
+- **Table-Driven Tests:** Use table-driven tests (`tests := []struct{...}`) for all logic with multiple input/output permutations.
+- **Mocking:** Mock external interfaces (DB, APIs) to ensure unit tests are hermetic.
+- **Coverage:** Aim for high coverage on exported functions, focusing on behavior rather than implementation details.
+
+## 7. Tooling
+
+- Use `go mod` for dependencies.
+- Enforce formatting with `go fmt` and `goimports`.
+- Run `golangci-lint` and `govulncheck` in CI/CD pipelines.
