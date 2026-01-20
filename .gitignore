@@ -15,4 +15,5 @@ osrs-events
 # Go
 vendor/
 
+# Database
 *.db
