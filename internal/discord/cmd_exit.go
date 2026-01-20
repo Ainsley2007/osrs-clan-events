@@ -44,8 +44,10 @@ func (b *Bot) exitCommand() Command {
 			if isOtherUser {
 				user, _ := s.User(targetUser)
 				message = fmt.Sprintf("✅ Removed <@%s> from all competitions", user.ID)
+				b.logAction(ctx, i.GuildID, fmt.Sprintf("🚪 <@%s> removed <@%s> from competitions", i.Member.User.ID, user.ID))
 			} else {
 				message = "✅ You have left all competitions"
+				b.logAction(ctx, i.GuildID, fmt.Sprintf("🚪 <@%s> left all competitions", targetUser))
 			}
 
 			respondSuccess(s, i.Interaction, message)

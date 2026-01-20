@@ -253,7 +253,7 @@ func (s *SQLiteStore) GetActiveAccounts(ctx context.Context) ([]*Account, error)
 func (s *SQLiteStore) GetAccountByRSN(ctx context.Context, rsn, discordUserID string) (*Account, error) {
 	query := `SELECT id, rsn, discord_user_id, error_count, is_active 
 		FROM accounts WHERE LOWER(rsn) = LOWER(?) AND discord_user_id = ?`
-	
+
 	var acc Account
 	err := s.db.QueryRowContext(ctx, query, rsn, discordUserID).Scan(
 		&acc.ID, &acc.RSN, &acc.DiscordUserID, &acc.ErrorCount, &acc.IsActive,

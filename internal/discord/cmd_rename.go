@@ -67,8 +67,10 @@ func (b *Bot) renameCommand() Command {
 			if isOtherUser {
 				user, _ := s.User(targetUser)
 				message = fmt.Sprintf("✅ Renamed `%s` to `%s` for <@%s>", currentRSN, newRSN, user.ID)
+				b.logAction(ctx, i.GuildID, fmt.Sprintf("✏️ <@%s> renamed account `%s` → `%s` for <@%s>", i.Member.User.ID, currentRSN, newRSN, user.ID))
 			} else {
 				message = fmt.Sprintf("✅ Renamed `%s` to `%s`", currentRSN, newRSN)
+				b.logAction(ctx, i.GuildID, fmt.Sprintf("✏️ <@%s> renamed account `%s` → `%s`", targetUser, currentRSN, newRSN))
 			}
 
 			respondSuccess(s, i.Interaction, message)

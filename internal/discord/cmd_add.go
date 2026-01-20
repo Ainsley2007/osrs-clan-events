@@ -59,8 +59,10 @@ func (b *Bot) addAccountCommand() Command {
 			if isOtherUser {
 				user, _ := s.User(targetUser)
 				message = fmt.Sprintf("✅ Added RSN `%s` for <@%s>", rsn, user.ID)
+				b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s` for <@%s>", i.Member.User.ID, rsn, user.ID))
 			} else {
 				message = fmt.Sprintf("✅ Added RSN: `%s`", rsn)
+				b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s`", targetUser, rsn))
 			}
 
 			respondSuccess(s, i.Interaction, message)

@@ -59,8 +59,10 @@ func (b *Bot) removeCommand() Command {
 			if isOtherUser {
 				user, _ := s.User(targetUser)
 				message = fmt.Sprintf("✅ Removed RSN `%s` from <@%s>", rsn, user.ID)
+				b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s` from <@%s>", i.Member.User.ID, rsn, user.ID))
 			} else {
 				message = fmt.Sprintf("✅ Removed RSN: `%s`", rsn)
+				b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s`", targetUser, rsn))
 			}
 
 			respondSuccess(s, i.Interaction, message)
