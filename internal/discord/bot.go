@@ -18,8 +18,9 @@ type Bot struct {
 	AccountService     *services.AccountService
 	InitializerService *services.InitializerService
 	Handlers           map[string]Command
-	initMutex          sync.Mutex
-	initInProgress     map[string]bool
+
+	mu             sync.Mutex
+	initInProgress map[string]bool
 }
 
 func New(token string, store database.Store) (*Bot, error) {
@@ -132,19 +133,19 @@ func (b *Bot) guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
 }
 
 func (b *Bot) initializeGuildAsync(guildID string) {
-	b.initMutex.Lock()
+	b.mu.Lock()
 	if b.initInProgress[guildID] {
 		log.Printf("[Guild %s] Initialization already in progress, skipping", guildID)
-		b.initMutex.Unlock()
+		b.mu.Unlock()
 		return
 	}
 	b.initInProgress[guildID] = true
-	b.initMutex.Unlock()
+	b.mu.Unlock()
 
 	defer func() {
-		b.initMutex.Lock()
+		b.mu.Lock()
 		delete(b.initInProgress, guildID)
-		b.initMutex.Unlock()
+		b.mu.Unlock()
 	}()
 
 	ctx := context.Background()
