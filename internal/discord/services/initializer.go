@@ -72,7 +72,7 @@ func (s *InitializerService) ensureCategories(ctx context.Context, guild *databa
 	return nil
 }
 
-func (s *InitializerService) ensureCategory(ctx context.Context, guildID, name string, categoryID *string) error {
+func (s *InitializerService) ensureCategory(_ context.Context, guildID, name string, categoryID *string) error {
 	if *categoryID != "" {
 		channel, err := s.session.Channel(*categoryID)
 		if err == nil && channel != nil {
@@ -127,7 +127,7 @@ func (s *InitializerService) ensureChannels(ctx context.Context, guild *database
 	return nil
 }
 
-func (s *InitializerService) ensureChannel(ctx context.Context, guildID, name, parentID string, channelID *string) error {
+func (s *InitializerService) ensureChannel(_ context.Context, guildID, name, parentID string, channelID *string) error {
 	if *channelID != "" {
 		channel, err := s.session.Channel(*channelID)
 		if err == nil && channel != nil {
@@ -183,7 +183,7 @@ func (s *InitializerService) ensureMessages(ctx context.Context, guild *database
 	return nil
 }
 
-func (s *InitializerService) ensureMessage(ctx context.Context, guildID, dashboardType, channelID string, messageID *string) error {
+func (s *InitializerService) ensureMessage(_ context.Context, guildID, dashboardType, channelID string, messageID *string) error {
 	if *messageID != "" {
 		msg, err := s.session.ChannelMessage(channelID, *messageID)
 		if err == nil && msg != nil {

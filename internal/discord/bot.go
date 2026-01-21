@@ -71,11 +71,12 @@ func (b *Bot) ready(s *discordgo.Session, event *discordgo.Ready) {
 }
 
 func (b *Bot) interactionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if i.Type == discordgo.InteractionApplicationCommand {
+	switch i.Type {
+	case discordgo.InteractionApplicationCommand:
 		if cmd, ok := b.Handlers[i.ApplicationCommandData().Name]; ok {
 			cmd.Handler(s, i)
 		}
-	} else if i.Type == discordgo.InteractionApplicationCommandAutocomplete {
+	case discordgo.InteractionApplicationCommandAutocomplete:
 		b.handleAutocomplete(s, i)
 	}
 }
