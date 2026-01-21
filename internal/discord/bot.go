@@ -3,6 +3,7 @@ package discord
 import (
 	"context"
 	"log"
+	"sync"
 
 	"osrs-events/internal/database"
 	"osrs-events/internal/discord/services"
@@ -17,6 +18,8 @@ type Bot struct {
 	AccountService     *services.AccountService
 	InitializerService *services.InitializerService
 	Handlers           map[string]Command
+	initMutex          sync.Mutex
+	initInProgress     map[string]bool
 }
 
 func New(token string, store database.Store) (*Bot, error) {
@@ -30,6 +33,7 @@ func New(token string, store database.Store) (*Bot, error) {
 		Store:          store,
 		GuildService:   services.NewGuildService(store),
 		AccountService: services.NewAccountService(store),
+		initInProgress: make(map[string]bool),
 	}
 
 	bot.InitializerService = services.NewInitializerService(dg, store)
@@ -128,6 +132,21 @@ func (b *Bot) guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
 }
 
 func (b *Bot) initializeGuildAsync(guildID string) {
+	b.initMutex.Lock()
+	if b.initInProgress[guildID] {
+		log.Printf("[Guild %s] Initialization already in progress, skipping", guildID)
+		b.initMutex.Unlock()
+		return
+	}
+	b.initInProgress[guildID] = true
+	b.initMutex.Unlock()
+
+	defer func() {
+		b.initMutex.Lock()
+		delete(b.initInProgress, guildID)
+		b.initMutex.Unlock()
+	}()
+
 	ctx := context.Background()
 	if err := b.InitializerService.InitializeGuild(ctx, guildID); err != nil {
 		log.Printf("Failed to initialize guild %s: %v", guildID, err)

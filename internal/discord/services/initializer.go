@@ -33,22 +33,21 @@ func (s *InitializerService) InitializeGuild(ctx context.Context, guildID string
 			IntervalTime: "22:00",
 		}
 		log.Printf("[Guild %s] Creating new guild entry", guildID)
+		if err := s.store.SaveGuild(ctx, guild); err != nil {
+			return fmt.Errorf("failed to create guild entry: %w", err)
+		}
 	}
 
 	if err := s.ensureCategories(ctx, guild); err != nil {
 		return fmt.Errorf("failed to ensure categories: %w", err)
 	}
 
-	if err := s.ensureChannels(guild); err != nil {
+	if err := s.ensureChannels(ctx, guild); err != nil {
 		return fmt.Errorf("failed to ensure channels: %w", err)
 	}
 
-	if err := s.ensureMessages(guild); err != nil {
+	if err := s.ensureMessages(ctx, guild); err != nil {
 		return fmt.Errorf("failed to ensure messages: %w", err)
-	}
-
-	if err := s.store.SaveGuild(ctx, guild); err != nil {
-		return fmt.Errorf("failed to save guild: %w", err)
 	}
 
 	log.Printf("[Guild %s] Initialization complete", guildID)
@@ -56,23 +55,31 @@ func (s *InitializerService) InitializeGuild(ctx context.Context, guildID string
 }
 
 func (s *InitializerService) ensureCategories(ctx context.Context, guild *database.Guild) error {
-	if err := s.ensureCategory(guild.GuildID, "╔═══BOTW═══╗", &guild.BotwCategoryID); err != nil {
+	if err := s.ensureCategory(ctx, guild.GuildID, "╔═══BOTW═══╗", &guild.BotwCategoryID); err != nil {
 		return err
 	}
-	if err := s.ensureCategory(guild.GuildID, "╔═══SOTW═══╗", &guild.SotwCategoryID); err != nil {
+	if err := s.store.SaveGuild(ctx, guild); err != nil {
+		return fmt.Errorf("failed to save guild after BOTW category: %w", err)
+	}
+
+	if err := s.ensureCategory(ctx, guild.GuildID, "╔═══SOTW═══╗", &guild.SotwCategoryID); err != nil {
 		return err
 	}
+	if err := s.store.SaveGuild(ctx, guild); err != nil {
+		return fmt.Errorf("failed to save guild after SOTW category: %w", err)
+	}
+
 	return nil
 }
 
-func (s *InitializerService) ensureCategory(guildID, name string, categoryID *string) error {
+func (s *InitializerService) ensureCategory(ctx context.Context, guildID, name string, categoryID *string) error {
 	if *categoryID != "" {
-		_, err := s.session.Channel(*categoryID)
-		if err == nil {
+		channel, err := s.session.Channel(*categoryID)
+		if err == nil && channel != nil {
 			log.Printf("[Guild %s] Category %s exists", guildID, name)
 			return nil
 		}
-		log.Printf("[Guild %s] Category %s not found, recreating", guildID, name)
+		log.Printf("[Guild %s] Category %s (ID: %s) not found in Discord, recreating", guildID, name, *categoryID)
 	}
 
 	channel, err := s.session.GuildChannelCreateComplex(guildID, discordgo.GuildChannelCreateData{
@@ -88,30 +95,46 @@ func (s *InitializerService) ensureCategory(guildID, name string, categoryID *st
 	return nil
 }
 
-func (s *InitializerService) ensureChannels(guild *database.Guild) error {
-	if err := s.ensureChannel(guild.GuildID, "botw-weekly", guild.BotwCategoryID, &guild.BotwChannelID); err != nil {
+func (s *InitializerService) ensureChannels(ctx context.Context, guild *database.Guild) error {
+	if err := s.ensureChannel(ctx, guild.GuildID, "botw-weekly", guild.BotwCategoryID, &guild.BotwChannelID); err != nil {
 		return err
 	}
-	if err := s.ensureChannel(guild.GuildID, "botw-overall", guild.BotwCategoryID, &guild.BotwOverallChannelID); err != nil {
+	if err := s.store.SaveGuild(ctx, guild); err != nil {
+		return fmt.Errorf("failed to save guild after botw-weekly: %w", err)
+	}
+
+	if err := s.ensureChannel(ctx, guild.GuildID, "botw-overall", guild.BotwCategoryID, &guild.BotwOverallChannelID); err != nil {
 		return err
 	}
-	if err := s.ensureChannel(guild.GuildID, "sotw-weekly", guild.SotwCategoryID, &guild.SotwChannelID); err != nil {
+	if err := s.store.SaveGuild(ctx, guild); err != nil {
+		return fmt.Errorf("failed to save guild after botw-overall: %w", err)
+	}
+
+	if err := s.ensureChannel(ctx, guild.GuildID, "sotw-weekly", guild.SotwCategoryID, &guild.SotwChannelID); err != nil {
 		return err
 	}
-	if err := s.ensureChannel(guild.GuildID, "sotw-overall", guild.SotwCategoryID, &guild.SotwOverallChannelID); err != nil {
+	if err := s.store.SaveGuild(ctx, guild); err != nil {
+		return fmt.Errorf("failed to save guild after sotw-weekly: %w", err)
+	}
+
+	if err := s.ensureChannel(ctx, guild.GuildID, "sotw-overall", guild.SotwCategoryID, &guild.SotwOverallChannelID); err != nil {
 		return err
 	}
+	if err := s.store.SaveGuild(ctx, guild); err != nil {
+		return fmt.Errorf("failed to save guild after sotw-overall: %w", err)
+	}
+
 	return nil
 }
 
-func (s *InitializerService) ensureChannel(guildID, name, parentID string, channelID *string) error {
+func (s *InitializerService) ensureChannel(ctx context.Context, guildID, name, parentID string, channelID *string) error {
 	if *channelID != "" {
-		_, err := s.session.Channel(*channelID)
-		if err == nil {
+		channel, err := s.session.Channel(*channelID)
+		if err == nil && channel != nil {
 			log.Printf("[Guild %s] Channel %s exists", guildID, name)
 			return nil
 		}
-		log.Printf("[Guild %s] Channel %s not found, recreating", guildID, name)
+		log.Printf("[Guild %s] Channel %s (ID: %s) not found in Discord, recreating", guildID, name, *channelID)
 	}
 
 	channel, err := s.session.GuildChannelCreateComplex(guildID, discordgo.GuildChannelCreateData{
@@ -128,30 +151,46 @@ func (s *InitializerService) ensureChannel(guildID, name, parentID string, chann
 	return nil
 }
 
-func (s *InitializerService) ensureMessages(guild *database.Guild) error {
-	if err := s.ensureMessage(guild.GuildID, "BOTW Weekly", guild.BotwChannelID, &guild.BotwMsgID); err != nil {
+func (s *InitializerService) ensureMessages(ctx context.Context, guild *database.Guild) error {
+	if err := s.ensureMessage(ctx, guild.GuildID, "BOTW Weekly", guild.BotwChannelID, &guild.BotwMsgID); err != nil {
 		return err
 	}
-	if err := s.ensureMessage(guild.GuildID, "BOTW Overall", guild.BotwOverallChannelID, &guild.BotwOverallMsgID); err != nil {
+	if err := s.store.SaveGuild(ctx, guild); err != nil {
+		return fmt.Errorf("failed to save guild after BOTW Weekly message: %w", err)
+	}
+
+	if err := s.ensureMessage(ctx, guild.GuildID, "BOTW Overall", guild.BotwOverallChannelID, &guild.BotwOverallMsgID); err != nil {
 		return err
 	}
-	if err := s.ensureMessage(guild.GuildID, "SOTW Weekly", guild.SotwChannelID, &guild.SotwMsgID); err != nil {
+	if err := s.store.SaveGuild(ctx, guild); err != nil {
+		return fmt.Errorf("failed to save guild after BOTW Overall message: %w", err)
+	}
+
+	if err := s.ensureMessage(ctx, guild.GuildID, "SOTW Weekly", guild.SotwChannelID, &guild.SotwMsgID); err != nil {
 		return err
 	}
-	if err := s.ensureMessage(guild.GuildID, "SOTW Overall", guild.SotwOverallChannelID, &guild.SotwOverallMsgID); err != nil {
+	if err := s.store.SaveGuild(ctx, guild); err != nil {
+		return fmt.Errorf("failed to save guild after SOTW Weekly message: %w", err)
+	}
+
+	if err := s.ensureMessage(ctx, guild.GuildID, "SOTW Overall", guild.SotwOverallChannelID, &guild.SotwOverallMsgID); err != nil {
 		return err
 	}
+	if err := s.store.SaveGuild(ctx, guild); err != nil {
+		return fmt.Errorf("failed to save guild after SOTW Overall message: %w", err)
+	}
+
 	return nil
 }
 
-func (s *InitializerService) ensureMessage(guildID, dashboardType, channelID string, messageID *string) error {
+func (s *InitializerService) ensureMessage(ctx context.Context, guildID, dashboardType, channelID string, messageID *string) error {
 	if *messageID != "" {
-		_, err := s.session.ChannelMessage(channelID, *messageID)
-		if err == nil {
+		msg, err := s.session.ChannelMessage(channelID, *messageID)
+		if err == nil && msg != nil {
 			log.Printf("[Guild %s] Message for %s exists", guildID, dashboardType)
 			return nil
 		}
-		log.Printf("[Guild %s] Message for %s not found, recreating", guildID, dashboardType)
+		log.Printf("[Guild %s] Message for %s (ID: %s) not found in Discord, recreating", guildID, dashboardType, *messageID)
 	}
 
 	embed := &discordgo.MessageEmbed{
