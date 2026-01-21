@@ -19,10 +19,6 @@ func New(ctx context.Context, credentialsFile string) (*Client, error) {
 		return nil, err
 	}
 
-	if credentialsFile != "" {
-		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credentialsFile)
-	}
-
 	config := &firebase.Config{
 		ProjectID: projectID,
 	}

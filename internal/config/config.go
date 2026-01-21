@@ -19,6 +19,6 @@ func Load() (*Config, error) {
 	return &Config{
 		DiscordToken:        os.Getenv("DISCORD_TOKEN"),
 		DatabaseURL:         os.Getenv("DATABASE_URL"),
-		FirebaseCredentials: os.Getenv("FIREBASE_CREDENTIALS"),
+		FirebaseCredentials: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 	}, nil
 }
