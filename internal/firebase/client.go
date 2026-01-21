@@ -3,7 +3,7 @@ package firebase
 import (
 	"context"
 
-	firebase "firebase.google.com/go"
+	firebase "firebase.google.com/go/v4"
 	"google.golang.org/api/option"
 )
 
@@ -25,7 +25,6 @@ func New(ctx context.Context, credentialsFile string) (*Client, error) {
 	return &Client{App: app}, nil
 }
 
-// Example method to access a service
-// func (c *Client) GetFirestore(ctx context.Context) (*firestore.Client, error) {
-// 	return c.App.Firestore(ctx)
-// }
+func (c *Client) RemoteConfig(ctx context.Context) (*RemoteConfigClient, error) {
+	return NewRemoteConfigClient(ctx, c.App)
+}
