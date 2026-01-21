@@ -7,7 +7,6 @@ import (
 	"os"
 
 	firebase "firebase.google.com/go/v4"
-	"google.golang.org/api/option"
 )
 
 type Client struct {
@@ -15,21 +14,20 @@ type Client struct {
 }
 
 func New(ctx context.Context, credentialsFile string) (*Client, error) {
-	credentialsJSON, projectID, err := readCredentials(credentialsFile)
+	projectID, err := extractProjectIDFromFile(credentialsFile)
 	if err != nil {
 		return nil, err
 	}
 
-	var opts []option.ClientOption
-	if len(credentialsJSON) > 0 {
-		opts = append(opts, option.WithCredentialsJSON(credentialsJSON))
+	if credentialsFile != "" {
+		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credentialsFile)
 	}
 
 	config := &firebase.Config{
 		ProjectID: projectID,
 	}
 
-	app, err := firebase.NewApp(ctx, config, opts...)
+	app, err := firebase.NewApp(ctx, config)
 	if err != nil {
 		return nil, err
 	}
@@ -37,14 +35,14 @@ func New(ctx context.Context, credentialsFile string) (*Client, error) {
 	return &Client{App: app}, nil
 }
 
-func readCredentials(credentialsFile string) ([]byte, string, error) {
+func extractProjectIDFromFile(credentialsFile string) (string, error) {
 	if credentialsFile == "" {
-		return nil, "", fmt.Errorf("credentials file not provided")
+		return "", fmt.Errorf("credentials file not provided")
 	}
 
 	data, err := os.ReadFile(credentialsFile)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read credentials file: %w", err)
+		return "", fmt.Errorf("failed to read credentials file: %w", err)
 	}
 
 	var creds struct {
@@ -52,14 +50,14 @@ func readCredentials(credentialsFile string) ([]byte, string, error) {
 	}
 
 	if err := json.Unmarshal(data, &creds); err != nil {
-		return nil, "", fmt.Errorf("failed to parse credentials file: %w", err)
+		return "", fmt.Errorf("failed to parse credentials file: %w", err)
 	}
 
 	if creds.ProjectID == "" {
-		return nil, "", fmt.Errorf("project_id not found in credentials file")
+		return "", fmt.Errorf("project_id not found in credentials file")
 	}
 
-	return data, creds.ProjectID, nil
+	return creds.ProjectID, nil
 }
 
 func (c *Client) RemoteConfig(ctx context.Context) (*RemoteConfigClient, error) {
