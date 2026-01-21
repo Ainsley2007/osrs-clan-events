@@ -7,14 +7,6 @@ import (
 	"time"
 )
 
-// TestFetchOSRSConfig is a manual integration test that requires:
-// 1. FIREBASE_CREDENTIALS environment variable set to path of service account JSON
-// 2. Firebase project with Remote Config enabled
-// 3. osrs_bosses and osrs_skills parameters configured
-//
-// Run with: go test -v ./internal/firebase/ -run TestFetchOSRSConfig
-//
-// To skip if credentials not available: go test -v ./internal/firebase/ -short
 func TestFetchOSRSConfig(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -84,11 +76,11 @@ func TestFetchOSRSConfig(t *testing.T) {
 
 	t.Logf("Successfully fetched config: %d bosses, %d skills", len(config.Bosses), len(config.Skills))
 	if len(config.Bosses) > 0 {
-		t.Logf("Sample boss: %s (%.2f points/KC, threshold: %d KC)", 
+		t.Logf("Sample boss: %s (%.2f points/KC, threshold: %d KC)",
 			config.Bosses[0].Name, config.Bosses[0].PointsPerKC, config.Bosses[0].ThresholdKC)
 	}
 	if len(config.Skills) > 0 {
-		t.Logf("Sample skill: %s (%.5f points/XP, threshold: %d XP)", 
+		t.Logf("Sample skill: %s (%.5f points/XP, threshold: %d XP)",
 			config.Skills[0].Name, config.Skills[0].PointsPerXP, config.Skills[0].XPThreshold)
 	}
 }

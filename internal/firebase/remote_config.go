@@ -10,16 +10,6 @@ import (
 	"firebase.google.com/go/v4/remoteconfig"
 )
 
-// RemoteConfigClient manages Firebase Remote Config operations for OSRS configurations.
-//
-// Setup Instructions:
-// 1. Go to https://console.firebase.google.com/
-// 2. Select your project (or create one)
-// 3. Click gear icon > Project Settings > Service Accounts tab
-// 4. Click "Generate New Private Key" and save JSON file
-// 5. Add to .env: FIREBASE_CREDENTIALS=firebase-credentials.json
-// 6. Enable Remote Config in Firebase Console left sidebar
-// 7. Ensure parameters exist: osrs_bosses, osrs_skills
 type RemoteConfigClient struct {
 	client *remoteconfig.Client
 }
