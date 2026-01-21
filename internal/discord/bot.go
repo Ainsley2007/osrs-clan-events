@@ -3,6 +3,7 @@ package discord
 import (
 	"context"
 	"log"
+	"sync"
 
 	"osrs-events/internal/database"
 	"osrs-events/internal/discord/services"
@@ -14,8 +15,12 @@ type Bot struct {
 	Session            *discordgo.Session
 	Store              database.Store
 	GuildService       *services.GuildService
+	AccountService     *services.AccountService
 	InitializerService *services.InitializerService
 	Handlers           map[string]Command
+
+	mu             sync.Mutex
+	initInProgress map[string]bool
 }
 
 func New(token string, store database.Store) (*Bot, error) {
@@ -25,9 +30,11 @@ func New(token string, store database.Store) (*Bot, error) {
 	}
 
 	bot := &Bot{
-		Session:      dg,
-		Store:        store,
-		GuildService: services.NewGuildService(store),
+		Session:        dg,
+		Store:          store,
+		GuildService:   services.NewGuildService(store),
+		AccountService: services.NewAccountService(store),
+		initInProgress: make(map[string]bool),
 	}
 
 	bot.InitializerService = services.NewInitializerService(dg, store)
@@ -64,11 +71,61 @@ func (b *Bot) ready(s *discordgo.Session, event *discordgo.Ready) {
 }
 
 func (b *Bot) interactionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if i.Type == discordgo.InteractionApplicationCommand {
+	switch i.Type {
+	case discordgo.InteractionApplicationCommand:
 		if cmd, ok := b.Handlers[i.ApplicationCommandData().Name]; ok {
 			cmd.Handler(s, i)
 		}
+	case discordgo.InteractionApplicationCommandAutocomplete:
+		b.handleAutocomplete(s, i)
 	}
+}
+
+func (b *Bot) handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ApplicationCommandData()
+
+	switch data.Name {
+	case "remove", "rename":
+		b.handleRSNAutocomplete(s, i)
+	}
+}
+
+func (b *Bot) handleRSNAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	ctx := context.Background()
+
+	userID := i.Member.User.ID
+	if userID == "" && i.User != nil {
+		userID = i.User.ID
+	}
+
+	accounts, err := b.AccountService.GetTrackedAccounts(ctx, userID)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+			Data: &discordgo.InteractionResponseData{
+				Choices: []*discordgo.ApplicationCommandOptionChoice{},
+			},
+		})
+		return
+	}
+
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(accounts))
+	for _, acc := range accounts {
+		if len(choices) >= 25 {
+			break
+		}
+		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+			Name:  acc.RSN,
+			Value: acc.RSN,
+		})
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
+	})
 }
 
 func (b *Bot) guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
@@ -77,6 +134,21 @@ func (b *Bot) guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
 }
 
 func (b *Bot) initializeGuildAsync(guildID string) {
+	b.mu.Lock()
+	if b.initInProgress[guildID] {
+		log.Printf("[Guild %s] Initialization already in progress, skipping", guildID)
+		b.mu.Unlock()
+		return
+	}
+	b.initInProgress[guildID] = true
+	b.mu.Unlock()
+
+	defer func() {
+		b.mu.Lock()
+		delete(b.initInProgress, guildID)
+		b.mu.Unlock()
+	}()
+
 	ctx := context.Background()
 	if err := b.InitializerService.InitializeGuild(ctx, guildID); err != nil {
 		log.Printf("Failed to initialize guild %s: %v", guildID, err)

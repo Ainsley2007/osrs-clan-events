@@ -14,10 +14,15 @@ func (b *Bot) setupCommands() {
 	// To add a new command:
 	// 1. Create a new file (e.g. cmd_profile.go)
 	// 2. Define a method on Bot that returns a Command
-	// 3. Call b.addCommand(b.profileCommand()) here
-	b.addCommand(b.setupLoggingChannelCommand())
+	// 3. Call b.registerCommand(b.profileCommand()) here
+	b.registerCommand(b.setupLoggingChannelCommand())
+	b.registerCommand(b.exitCommand())
+	b.registerCommand(b.addAccountCommand())
+	b.registerCommand(b.removeCommand())
+	b.registerCommand(b.trackedCommand())
+	b.registerCommand(b.renameCommand())
 }
 
-func (b *Bot) addCommand(cmd Command) {
+func (b *Bot) registerCommand(cmd Command) {
 	b.Handlers[cmd.Definition.Name] = cmd
 }
