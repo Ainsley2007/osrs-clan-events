@@ -3,18 +3,25 @@ package firebase
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/joho/godotenv"
 )
+
+func init() {
+	_ = godotenv.Load(filepath.Join("..", "..", ".env"))
+}
 
 func TestFetchOSRSConfig(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	credPath := os.Getenv("FIREBASE_CREDENTIALS")
+	credPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	if credPath == "" {
-		t.Skip("FIREBASE_CREDENTIALS not set, skipping integration test")
+		t.Skip("GOOGLE_APPLICATION_CREDENTIALS not set, skipping integration test")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -90,9 +97,9 @@ func TestGetRandomBoss(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	credPath := os.Getenv("FIREBASE_CREDENTIALS")
+	credPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	if credPath == "" {
-		t.Skip("FIREBASE_CREDENTIALS not set, skipping integration test")
+		t.Skip("GOOGLE_APPLICATION_CREDENTIALS not set, skipping integration test")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -129,9 +136,9 @@ func TestGetRandomSkill(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	credPath := os.Getenv("FIREBASE_CREDENTIALS")
+	credPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	if credPath == "" {
-		t.Skip("FIREBASE_CREDENTIALS not set, skipping integration test")
+		t.Skip("GOOGLE_APPLICATION_CREDENTIALS not set, skipping integration test")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
