@@ -17,3 +17,6 @@ vendor/
 
 # Database
 *.db
+
+# Firebase
+firebase-credentials.json

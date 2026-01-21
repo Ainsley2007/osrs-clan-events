@@ -2,9 +2,11 @@ package firebase
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
 
-	firebase "firebase.google.com/go"
-	"google.golang.org/api/option"
+	firebase "firebase.google.com/go/v4"
 )
 
 type Client struct {
@@ -12,12 +14,16 @@ type Client struct {
 }
 
 func New(ctx context.Context, credentialsFile string) (*Client, error) {
-	var opts []option.ClientOption
-	if credentialsFile != "" {
-		opts = append(opts, option.WithCredentialsFile(credentialsFile))
+	projectID, err := extractProjectIDFromFile(credentialsFile)
+	if err != nil {
+		return nil, err
 	}
 
-	app, err := firebase.NewApp(ctx, nil, opts...)
+	config := &firebase.Config{
+		ProjectID: projectID,
+	}
+
+	app, err := firebase.NewApp(ctx, config)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +31,31 @@ func New(ctx context.Context, credentialsFile string) (*Client, error) {
 	return &Client{App: app}, nil
 }
 
-// Example method to access a service
-// func (c *Client) GetFirestore(ctx context.Context) (*firestore.Client, error) {
-// 	return c.App.Firestore(ctx)
-// }
+func extractProjectIDFromFile(credentialsFile string) (string, error) {
+	if credentialsFile == "" {
+		return "", fmt.Errorf("credentials file not provided")
+	}
+
+	data, err := os.ReadFile(credentialsFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to read credentials file: %w", err)
+	}
+
+	var creds struct {
+		ProjectID string `json:"project_id"`
+	}
+
+	if err := json.Unmarshal(data, &creds); err != nil {
+		return "", fmt.Errorf("failed to parse credentials file: %w", err)
+	}
+
+	if creds.ProjectID == "" {
+		return "", fmt.Errorf("project_id not found in credentials file")
+	}
+
+	return creds.ProjectID, nil
+}
+
+func (c *Client) RemoteConfig(ctx context.Context) (*RemoteConfigClient, error) {
+	return NewRemoteConfigClient(ctx, c.App)
+}
