@@ -15,14 +15,14 @@ type Client struct {
 }
 
 func New(ctx context.Context, credentialsFile string) (*Client, error) {
-	var opts []option.ClientOption
-	if credentialsFile != "" {
-		opts = append(opts, option.WithCredentialsFile(credentialsFile))
+	credentialsJSON, projectID, err := readCredentials(credentialsFile)
+	if err != nil {
+		return nil, err
 	}
 
-	projectID, err := extractProjectID(credentialsFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract project ID: %w", err)
+	var opts []option.ClientOption
+	if len(credentialsJSON) > 0 {
+		opts = append(opts, option.WithCredentialsJSON(credentialsJSON))
 	}
 
 	config := &firebase.Config{
@@ -37,14 +37,14 @@ func New(ctx context.Context, credentialsFile string) (*Client, error) {
 	return &Client{App: app}, nil
 }
 
-func extractProjectID(credentialsFile string) (string, error) {
+func readCredentials(credentialsFile string) ([]byte, string, error) {
 	if credentialsFile == "" {
-		return "", fmt.Errorf("credentials file not provided")
+		return nil, "", fmt.Errorf("credentials file not provided")
 	}
 
 	data, err := os.ReadFile(credentialsFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to read credentials file: %w", err)
+		return nil, "", fmt.Errorf("failed to read credentials file: %w", err)
 	}
 
 	var creds struct {
@@ -52,14 +52,14 @@ func extractProjectID(credentialsFile string) (string, error) {
 	}
 
 	if err := json.Unmarshal(data, &creds); err != nil {
-		return "", fmt.Errorf("failed to parse credentials file: %w", err)
+		return nil, "", fmt.Errorf("failed to parse credentials file: %w", err)
 	}
 
 	if creds.ProjectID == "" {
-		return "", fmt.Errorf("project_id not found in credentials file")
+		return nil, "", fmt.Errorf("project_id not found in credentials file")
 	}
 
-	return creds.ProjectID, nil
+	return data, creds.ProjectID, nil
 }
 
 func (c *Client) RemoteConfig(ctx context.Context) (*RemoteConfigClient, error) {
