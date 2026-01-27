@@ -76,6 +76,27 @@ func (s *SQLiteStore) GetActiveEvents(ctx context.Context, guildID string, event
 	return events, rows.Err()
 }
 
+func (s *SQLiteStore) GetAllEventsByGuildAndType(ctx context.Context, guildID string, eventType string) ([]*Event, error) {
+	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
+		FROM events WHERE guild_id = ? AND type = ? ORDER BY start_time DESC`
+
+	rows, err := s.db.QueryContext(ctx, query, guildID, eventType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []*Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.BossesToTrack, &e.StartTime, &e.EndTime, &e.IsActive, &e.PointsPerKC, &e.PointsPerXP, &e.ThresholdKC, &e.XPThreshold); err != nil {
+			return nil, err
+		}
+		events = append(events, &e)
+	}
+	return events, rows.Err()
+}
+
 func (s *SQLiteStore) CreateEvent(ctx context.Context, e *Event) error {
 	query := `INSERT INTO events (guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -142,11 +163,13 @@ func (s *SQLiteStore) GetAllActiveEvents(ctx context.Context) ([]*Event, error) 
 }
 
 func (s *SQLiteStore) GetExpiringEvents(ctx context.Context) ([]*Event, error) {
+	// Find events that have ended (within 1 minute window to catch them reliably)
+	// This ensures we process rollovers at the exact end time ± a few seconds
 	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
 		FROM events 
 		WHERE is_active = 1 
-		AND end_time <= datetime('now', '+10 minutes')
-		AND end_time >= datetime('now', '-5 minutes')
+		AND end_time <= datetime('now')
+		AND end_time >= datetime('now', '-1 minute')
 		ORDER BY end_time ASC`
 
 	rows, err := s.db.QueryContext(ctx, query)

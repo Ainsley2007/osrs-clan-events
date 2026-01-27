@@ -73,11 +73,11 @@ func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime 
 		return nil, fmt.Errorf("failed to create event: %w", err)
 	}
 
-	// Only create snapshots if start time is now or in the past
-	// If start time is in the future (during rollover), snapshots will be created by scheduler when event actually starts
+	// Create snapshots immediately if event has started (start time is now or in the past)
+	// During rollover, the new event starts at the old event's end time, so snapshots are created immediately
 	nowUTC := time.Now().UTC()
 	startTimeUTC := startTime.UTC()
-	if startTimeUTC.Before(nowUTC) || startTimeUTC.Equal(nowUTC) {
+	if !startTimeUTC.After(nowUTC) {
 		if _, err := s.snapshotService.CreateInitialSnapshots(ctx, event.ID, guildID, bossConfig.Name, "boss"); err != nil {
 			return nil, fmt.Errorf("failed to create initial snapshots: %w", err)
 		}
@@ -127,11 +127,11 @@ func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime 
 		return nil, fmt.Errorf("failed to create event: %w", err)
 	}
 
-	// Only create snapshots if start time is now or in the past
-	// If start time is in the future (during rollover), snapshots will be created by scheduler when event actually starts
+	// Create snapshots immediately if event has started (start time is now or in the past)
+	// During rollover, the new event starts at the old event's end time, so snapshots are created immediately
 	nowUTC := time.Now().UTC()
 	startTimeUTC := startTime.UTC()
-	if startTimeUTC.Before(nowUTC) || startTimeUTC.Equal(nowUTC) {
+	if !startTimeUTC.After(nowUTC) {
 		if _, err := s.snapshotService.CreateInitialSnapshots(ctx, event.ID, guildID, skillConfig.Name, "skill"); err != nil {
 			return nil, fmt.Errorf("failed to create initial snapshots: %w", err)
 		}
@@ -156,6 +156,7 @@ func (s *EventService) IsEventRunning(ctx context.Context, guildID, eventType st
 }
 
 func (s *EventService) CreateEvent(ctx context.Context, event *database.Event) error {
+	// Events run for exactly 7 days (± a few seconds for processing)
 	event.EndTime = event.StartTime.Add(7 * 24 * time.Hour)
 	event.IsActive = true
 	return s.store.CreateEvent(ctx, event)
@@ -166,7 +167,8 @@ func (s *EventService) GetActiveEvent(ctx context.Context, guildID, eventType st
 }
 
 func (s *EventService) GetNextWeekNumber(ctx context.Context, guildID, eventType string) (int, error) {
-	events, err := s.store.GetActiveEvents(ctx, guildID, eventType)
+	// Get ALL events (active and inactive) to find the maximum week number
+	events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, eventType)
 	if err != nil {
 		return 1, nil
 	}
@@ -182,12 +184,17 @@ func (s *EventService) GetNextWeekNumber(ctx context.Context, guildID, eventType
 }
 
 func (s *EventService) CompleteEvent(ctx context.Context, event *database.Event) error {
-	// Final snapshot update (10 minutes before end, handled by GetExpiringEvents query)
+	// Final snapshot update at event end time (handled by GetExpiringEvents query)
 	_, err := s.snapshotService.UpdateSnapshotsForEvent(ctx, event)
 	if err != nil {
 		return fmt.Errorf("failed to update final snapshots: %w", err)
 	}
 
+	return s.CompleteEventWithoutSnapshotUpdate(ctx, event)
+}
+
+// CompleteEventWithoutSnapshotUpdate completes an event without updating snapshots (assumes they're already updated)
+func (s *EventService) CompleteEventWithoutSnapshotUpdate(ctx context.Context, event *database.Event) error {
 	if err := s.snapshotService.CalculateAndAwardPoints(ctx, event); err != nil {
 		return fmt.Errorf("failed to calculate points: %w", err)
 	}

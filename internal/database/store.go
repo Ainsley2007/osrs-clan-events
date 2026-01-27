@@ -98,6 +98,7 @@ type Store interface {
 	GetEvent(ctx context.Context, id int64) (*Event, error)
 	GetActiveEvent(ctx context.Context, guildID string, eventType string) (*Event, error)
 	GetActiveEvents(ctx context.Context, guildID string, eventType string) ([]*Event, error)
+	GetAllEventsByGuildAndType(ctx context.Context, guildID string, eventType string) ([]*Event, error)
 	CreateEvent(ctx context.Context, event *Event) error
 	GetPendingStartEvents(ctx context.Context) ([]*Event, error)
 	GetAllActiveEvents(ctx context.Context) ([]*Event, error)

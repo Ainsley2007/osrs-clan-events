@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"osrs-events/internal/database"
@@ -24,6 +25,22 @@ func NewLeaderboardService(store LeaderboardStore, session *discordgo.Session, l
 		session: session,
 		logger:  logger,
 	}
+}
+
+// formatNumber formats an integer with thousand separators (commas)
+func formatNumber(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	if len(s) <= 3 {
+		return s
+	}
+	var result strings.Builder
+	for i, r := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result.WriteRune(',')
+		}
+		result.WriteRune(r)
+	}
+	return result.String()
 }
 
 type LeaderboardEntry struct {
@@ -225,49 +242,66 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 	} else {
 		description.WriteString(fmt.Sprintf("**%s:** %s\n", metricLabel, event.MetricJsonID))
 	}
-	description.WriteString(fmt.Sprintf("**%s:** %d\n", thresholdLabel, thresholdValue))
+	description.WriteString(fmt.Sprintf("**%s:** %s\n", thresholdLabel, formatNumber(int64(thresholdValue))))
 	if event.Type == "botw" {
-		description.WriteString(fmt.Sprintf("**%s:** %.2f\n\n", pointsLabel, event.PointsPerKC))
+		description.WriteString(fmt.Sprintf("**%s:** %g\n\n", pointsLabel, event.PointsPerKC))
 	} else {
-		description.WriteString(fmt.Sprintf("**%s:** %.2f\n\n", pointsLabel, event.PointsPerXP))
+		description.WriteString(fmt.Sprintf("**%s:** %g\n\n", pointsLabel, event.PointsPerXP))
 	}
 
 	if len(entries) == 0 {
 		description.WriteString("No participants above threshold yet.")
 	} else {
-		description.WriteString("**Current Rankings:**\n")
-		for _, entry := range entries {
-			medal := ""
+		description.WriteString("**Current Rankings:**\n\n")
+		for i, entry := range entries {
+			var rankPrefix string
 			switch entry.CurrentRank {
 			case 1:
-				medal = "🥇 "
+				rankPrefix = "🥇"
 			case 2:
-				medal = "🥈 "
+				rankPrefix = "🥈"
 			case 3:
-				medal = "🥉 "
+				rankPrefix = "🥉"
+			default:
+				rankPrefix = fmt.Sprintf("**%d.**", entry.CurrentRank)
 			}
 
-			var gainDisplay string
+			var gainLabel string
 			if event.Type == "botw" {
-				gainDisplay = fmt.Sprintf("%d KC", entry.TotalGain)
+				gainLabel = "KC"
 			} else {
-				gainDisplay = fmt.Sprintf("%d XP", entry.TotalGain)
+				gainLabel = "XP"
 			}
 
-			description.WriteString(fmt.Sprintf("%s**%d.** <@%s> - **%d pts** (%s)\n",
-				medal, entry.CurrentRank, entry.DiscordID, entry.TotalPoints, gainDisplay))
+			// Main entry: icon/rank - name - points (gain label)
+			description.WriteString(fmt.Sprintf("%s <@%s> - `points: %s` (*%s %s*)\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)), formatNumber(int64(entry.TotalGain)), gainLabel))
 
-			// Show account breakdown
+			// Show account breakdown if there are multiple accounts with gains
+			accountsWithGain := 0
 			for _, acc := range entry.Accounts {
 				if acc.Gain > 0 {
-					var accGainDisplay string
-					if event.Type == "botw" {
-						accGainDisplay = fmt.Sprintf("%d KC", acc.Gain)
-					} else {
-						accGainDisplay = fmt.Sprintf("%d XP", acc.Gain)
-					}
-					description.WriteString(fmt.Sprintf("   └─ %s: %s\n", acc.RSN, accGainDisplay))
+					accountsWithGain++
 				}
+			}
+
+			if accountsWithGain > 1 {
+				for _, acc := range entry.Accounts {
+					if acc.Gain > 0 {
+						var accGainDisplay string
+						if event.Type == "botw" {
+							accGainDisplay = fmt.Sprintf("%s KC", formatNumber(int64(acc.Gain)))
+						} else {
+							accGainDisplay = fmt.Sprintf("%s XP", formatNumber(int64(acc.Gain)))
+						}
+						// Use Unicode em spaces for indentation (Discord preserves these)
+						description.WriteString(fmt.Sprintf("\u2003• *%s*: %s\n", acc.RSN, accGainDisplay))
+					}
+				}
+			}
+
+			// Add spacing between entries (except after the last one)
+			if i < len(entries)-1 {
+				description.WriteString("\n")
 			}
 		}
 	}
@@ -388,31 +422,29 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 				break
 			}
 
-			medal := ""
+			var rankPrefix string
 			switch entry.CurrentRank {
 			case 1:
-				medal = "🥇 "
+				rankPrefix = "🥇"
 			case 2:
-				medal = "🥈 "
+				rankPrefix = "🥈"
 			case 3:
-				medal = "🥉 "
+				rankPrefix = "🥉"
+			default:
+				rankPrefix = fmt.Sprintf("**%d.**", entry.CurrentRank)
 			}
 
-			description.WriteString(fmt.Sprintf("%s**%d.** <@%s> - **%d pts**\n",
-				medal, entry.CurrentRank, entry.DiscordID, entry.TotalPoints))
+			// Main entry: icon/rank - name - points
+			description.WriteString(fmt.Sprintf("%s <@%s> - points: `%s`\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints))))
 
-			// Show account breakdown
-			if len(entry.Accounts) > 0 {
-				accountNames := make([]string, 0, len(entry.Accounts))
-				for _, acc := range entry.Accounts {
-					accountNames = append(accountNames, acc.RSN)
-				}
-				description.WriteString(fmt.Sprintf("   └─ Accounts: %s\n", strings.Join(accountNames, ", ")))
+			// Add spacing between entries (except after the last one)
+			if i < len(entries)-1 && i < 19 {
+				description.WriteString("\n")
 			}
 		}
 
 		if len(entries) > 20 {
-			description.WriteString(fmt.Sprintf("\n... and %d more", len(entries)-20))
+			description.WriteString(fmt.Sprintf("\n... and %s more", formatNumber(int64(len(entries)-20))))
 		}
 	}
 

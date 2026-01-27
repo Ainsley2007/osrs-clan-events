@@ -89,18 +89,14 @@ func (s *AccountService) createSnapshotsForActiveEvents(ctx context.Context, acc
 
 	// Use UTC for all time comparisons
 	now := time.Now().UTC()
-	createdAny := false
+	var eventsToCreate []*database.Event
 
-	// Create snapshot for BOTW if active and has started
+	// Collect events that are active and have started
 	if botwEvent != nil {
-		// Compare in UTC
 		eventStartUTC := botwEvent.StartTime.UTC()
 		if eventStartUTC.Before(now) || eventStartUTC.Equal(now) {
+			eventsToCreate = append(eventsToCreate, botwEvent)
 			s.logger.Printf("Creating BOTW snapshot for account %s in Week %d event", account.RSN, botwEvent.WeekNumber)
-			if err := s.snapshotService.CreateSnapshotForAccount(ctx, botwEvent, account); err != nil {
-				return fmt.Errorf("failed to create BOTW snapshot: %w", err)
-			}
-			createdAny = true
 		} else {
 			s.logger.Printf("BOTW Week %d event has not started yet (starts at %v UTC, now is %v UTC)", botwEvent.WeekNumber, eventStartUTC, now)
 		}
@@ -108,16 +104,11 @@ func (s *AccountService) createSnapshotsForActiveEvents(ctx context.Context, acc
 		s.logger.Printf("No active BOTW event found for guild %s", guildID)
 	}
 
-	// Create snapshot for SOTW if active and has started
 	if sotwEvent != nil {
-		// Compare in UTC
 		eventStartUTC := sotwEvent.StartTime.UTC()
 		if eventStartUTC.Before(now) || eventStartUTC.Equal(now) {
+			eventsToCreate = append(eventsToCreate, sotwEvent)
 			s.logger.Printf("Creating SOTW snapshot for account %s in Week %d event", account.RSN, sotwEvent.WeekNumber)
-			if err := s.snapshotService.CreateSnapshotForAccount(ctx, sotwEvent, account); err != nil {
-				return fmt.Errorf("failed to create SOTW snapshot: %w", err)
-			}
-			createdAny = true
 		} else {
 			s.logger.Printf("SOTW Week %d event has not started yet (starts at %v UTC, now is %v UTC)", sotwEvent.WeekNumber, eventStartUTC, now)
 		}
@@ -125,8 +116,14 @@ func (s *AccountService) createSnapshotsForActiveEvents(ctx context.Context, acc
 		s.logger.Printf("No active SOTW event found for guild %s", guildID)
 	}
 
-	if !createdAny {
+	if len(eventsToCreate) == 0 {
 		s.logger.Printf("No snapshots created for account %s - no active events that have started", account.RSN)
+		return nil
+	}
+
+	// Create snapshots for all events efficiently (fetch stats once)
+	if err := s.snapshotService.CreateSnapshotsForAccount(ctx, eventsToCreate, account); err != nil {
+		return fmt.Errorf("failed to create snapshots: %w", err)
 	}
 
 	return nil

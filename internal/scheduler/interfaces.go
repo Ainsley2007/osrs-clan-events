@@ -19,15 +19,21 @@ type Store interface {
 
 type EventService interface {
 	CompleteEvent(ctx context.Context, event *database.Event) error
+	CompleteEventWithoutSnapshotUpdate(ctx context.Context, event *database.Event) error
 	AutoRollover(ctx context.Context, guildID string, eventType string, startTime time.Time) (*services.StartEventResult, error)
 }
 
 type SnapshotService interface {
 	UpdateSnapshotsForEvent(ctx context.Context, event *database.Event) ([]services.FailedAccountUpdate, error)
+	UpdateSnapshotsForEvents(ctx context.Context, events []*database.Event) ([]services.FailedAccountUpdate, error)
 	CreateInitialSnapshots(ctx context.Context, eventID int64, guildID, metricName, metricType string) (int, error)
 }
 
 type LeaderboardService interface {
 	UpdateWeeklyLeaderboard(ctx context.Context, guildID string, eventType string) error
 	UpdateOverallLeaderboard(ctx context.Context, guildID string, eventType string) error
+}
+
+type InitializerService interface {
+	RenameCategoryForEvent(ctx context.Context, guild *database.Guild, eventType string, event *database.Event) error
 }

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"testing"
+	"time"
 
 	"osrs-events/internal/database"
 )
@@ -62,6 +63,54 @@ func TestIsEventRunning(t *testing.T) {
 				t.Fatalf("expected active=%v, got %v", test.expectedActive, active)
 			}
 		})
+	}
+}
+
+func TestCreateEvent(t *testing.T) {
+	// This test verifies that CreateEvent sets the end time to exactly 7 days after start time
+	// and marks the event as active, ensuring each week is exactly 7 days.
+	startTime := time.Date(2026, 1, 23, 10, 0, 0, 0, time.UTC)
+	expectedEndTime := startTime.Add(7 * 24 * time.Hour)
+
+	var createdEvent *database.Event
+	store := &fakeEventStore{
+		createEventFn: func(ctx context.Context, event *database.Event) error {
+			createdEvent = event
+			return nil
+		},
+	}
+
+	service := NewEventService(store, nil, nil)
+	event := &database.Event{
+		GuildID:      "test-guild",
+		Type:         "botw",
+		WeekNumber:   1,
+		MetricJsonID: "Vorkath",
+		StartTime:    startTime,
+	}
+
+	err := service.CreateEvent(context.Background(), event)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if createdEvent == nil {
+		t.Fatalf("expected event to be created")
+	}
+
+	if !createdEvent.IsActive {
+		t.Fatalf("expected event to be active")
+	}
+
+	if !createdEvent.EndTime.Equal(expectedEndTime) {
+		t.Fatalf("expected end time %v, got %v", expectedEndTime, createdEvent.EndTime)
+	}
+
+	// Verify the duration is exactly 7 days (within 1 second tolerance for processing)
+	duration := createdEvent.EndTime.Sub(createdEvent.StartTime)
+	expectedDuration := 7 * 24 * time.Hour
+	if duration < expectedDuration-time.Second || duration > expectedDuration+time.Second {
+		t.Fatalf("expected duration of 7 days, got %v", duration)
 	}
 }
 

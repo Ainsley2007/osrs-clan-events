@@ -36,6 +36,7 @@ type SnapshotStore interface {
 type EventStore interface {
 	GetActiveEvent(ctx context.Context, guildID string, eventType string) (*database.Event, error)
 	GetActiveEvents(ctx context.Context, guildID string, eventType string) ([]*database.Event, error)
+	GetAllEventsByGuildAndType(ctx context.Context, guildID string, eventType string) ([]*database.Event, error)
 	CreateEvent(ctx context.Context, event *database.Event) error
 	DeactivateEvent(ctx context.Context, eventID int64) error
 }

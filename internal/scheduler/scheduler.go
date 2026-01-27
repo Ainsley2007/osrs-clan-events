@@ -13,22 +13,24 @@ type Scheduler struct {
 	eventService       EventService
 	snapshotService    SnapshotService
 	leaderboardService LeaderboardService
+	initializerService InitializerService
 	session            *discordgo.Session
 	clock              Clock
 	stopCompletion     chan struct{}
 	stopHourly         chan struct{}
 }
 
-func New(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, session *discordgo.Session) *Scheduler {
-	return NewWithClock(store, eventService, snapshotService, leaderboardService, session, realClock{})
+func New(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, initializerService InitializerService, session *discordgo.Session) *Scheduler {
+	return NewWithClock(store, eventService, snapshotService, leaderboardService, initializerService, session, realClock{})
 }
 
-func NewWithClock(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, session *discordgo.Session, clock Clock) *Scheduler {
+func NewWithClock(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, initializerService InitializerService, session *discordgo.Session, clock Clock) *Scheduler {
 	return &Scheduler{
 		store:              store,
 		eventService:       eventService,
 		snapshotService:    snapshotService,
 		leaderboardService: leaderboardService,
+		initializerService: initializerService,
 		session:            session,
 		clock:              clock,
 		stopCompletion:     make(chan struct{}),

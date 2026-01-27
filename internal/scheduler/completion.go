@@ -85,6 +85,14 @@ func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
 		newEvents       []discord.RolloverResult
 	})
 
+	// Take final snapshot for all events that have ended (fetch stats once per account)
+	// Events are processed when end_time <= now, ensuring each week is exactly 7 days ± a few seconds
+	if len(events) > 0 {
+		if _, err := s.snapshotService.UpdateSnapshotsForEvents(ctx, events); err != nil {
+			log.Printf("Failed to batch update final snapshots before completion: %v", err)
+		}
+	}
+
 	for _, event := range events {
 		log.Printf("Processing event completion: %s (ID: %d, Guild: %s)", event.Type, event.ID, event.GuildID)
 
@@ -96,7 +104,8 @@ func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
 			}
 		}
 
-		if err := s.eventService.CompleteEvent(ctx, event); err != nil {
+		// Complete event (snapshots already updated, just calculate points and deactivate)
+		if err := s.eventService.CompleteEventWithoutSnapshotUpdate(ctx, event); err != nil {
 			log.Printf("Failed to complete event %d: %v", event.ID, err)
 			continue
 		}
@@ -128,7 +137,8 @@ func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
 			}
 		}
 
-		// Use UTC for rollover to maintain consistency
+		// Start new event immediately at the old event's end time
+		// This ensures seamless rollover with no gap between events
 		rolloverResult, err := s.eventService.AutoRollover(ctx, event.GuildID, event.Type, event.EndTime)
 		if err != nil {
 			log.Printf("Failed to auto-rollover event %d: %v", event.ID, err)
@@ -137,6 +147,13 @@ func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
 
 		// Update weekly leaderboard for new event
 		if rolloverResult != nil {
+			// Rename category with new event name
+			if guild != nil {
+				if err := s.initializerService.RenameCategoryForEvent(ctx, guild, event.Type, rolloverResult.Event); err != nil {
+					log.Printf("Failed to rename category for %s: %v", event.Type, err)
+				}
+			}
+
 			if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, event.GuildID, event.Type); err != nil {
 				log.Printf("Failed to update weekly leaderboard after rollover: %v", err)
 			}

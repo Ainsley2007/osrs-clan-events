@@ -94,9 +94,19 @@ func (b *Bot) handleStart(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		}
 
 		guild, err := b.Store.GetGuild(ctx, i.GuildID)
-		if err == nil && guild.LogChannelID != "" {
-			SendCompetitionStartedLog(s, guild.LogChannelID, botwResult.MetricName, sotwResult.MetricName,
-				botwResult.Event.WeekNumber, sotwResult.Event.WeekNumber, i.Member.User.ID)
+		if err == nil {
+			// Rename categories with new event names
+			if err := b.InitializerService.RenameCategoryForEvent(ctx, guild, "botw", botwResult.Event); err != nil {
+				log.Printf("Failed to rename BOTW category: %v", err)
+			}
+			if err := b.InitializerService.RenameCategoryForEvent(ctx, guild, "sotw", sotwResult.Event); err != nil {
+				log.Printf("Failed to rename SOTW category: %v", err)
+			}
+
+			if guild.LogChannelID != "" {
+				SendCompetitionStartedLog(s, guild.LogChannelID, botwResult.MetricName, sotwResult.MetricName,
+					botwResult.Event.WeekNumber, sotwResult.Event.WeekNumber, i.Member.User.ID)
+			}
 		}
 	}()
 }
