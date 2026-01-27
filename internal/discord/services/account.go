@@ -10,13 +10,13 @@ import (
 )
 
 type AccountService struct {
-	store              database.Store
+	store              AccountStore
 	snapshotService    *SnapshotService
 	leaderboardService *LeaderboardService
 	logger             Logger
 }
 
-func NewAccountService(store database.Store, snapshotService *SnapshotService, leaderboardService *LeaderboardService, logger Logger) *AccountService {
+func NewAccountService(store AccountStore, snapshotService *SnapshotService, leaderboardService *LeaderboardService, logger Logger) *AccountService {
 	return &AccountService{
 		store:              store,
 		snapshotService:    snapshotService,

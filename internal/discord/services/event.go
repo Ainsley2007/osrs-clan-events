@@ -11,12 +11,12 @@ import (
 )
 
 type EventService struct {
-	store           database.Store
+	store           EventStore
 	snapshotService *SnapshotService
 	firebaseClient  *firebase.RemoteConfigClient
 }
 
-func NewEventService(store database.Store, snapshotService *SnapshotService, firebaseClient *firebase.RemoteConfigClient) *EventService {
+func NewEventService(store EventStore, snapshotService *SnapshotService, firebaseClient *firebase.RemoteConfigClient) *EventService {
 	return &EventService{
 		store:           store,
 		snapshotService: snapshotService,

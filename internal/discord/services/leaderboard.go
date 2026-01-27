@@ -13,12 +13,12 @@ import (
 )
 
 type LeaderboardService struct {
-	store   database.Store
+	store   LeaderboardStore
 	session *discordgo.Session
 	logger  Logger
 }
 
-func NewLeaderboardService(store database.Store, session *discordgo.Session, logger Logger) *LeaderboardService {
+func NewLeaderboardService(store LeaderboardStore, session *discordgo.Session, logger Logger) *LeaderboardService {
 	return &LeaderboardService{
 		store:   store,
 		session: session,

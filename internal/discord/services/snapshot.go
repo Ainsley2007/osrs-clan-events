@@ -11,11 +11,11 @@ import (
 )
 
 type SnapshotService struct {
-	store      database.Store
+	store      SnapshotStore
 	osrsClient *osrs.Client
 }
 
-func NewSnapshotService(store database.Store, osrsClient *osrs.Client) *SnapshotService {
+func NewSnapshotService(store SnapshotStore, osrsClient *osrs.Client) *SnapshotService {
 	return &SnapshotService{
 		store:      store,
 		osrsClient: osrsClient,

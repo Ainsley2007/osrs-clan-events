@@ -44,7 +44,7 @@ func TestIsEventRunning(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			store := &fakeStore{
+			store := &fakeEventStore{
 				getActiveEventFn: func(ctx context.Context, guildID, eventType string) (*database.Event, error) {
 					return test.getEvent()
 				},
