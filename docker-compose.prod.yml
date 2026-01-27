@@ -8,7 +8,7 @@
 #
 services:
   osrs-events:
-    image: ghcr.io/OWNER/REPO:latest
+    image: ghcr.io/ainsley2007/osrs-clan-events:latest
     container_name: osrs-events
     restart: unless-stopped
     volumes:
@@ -18,3 +18,5 @@ services:
       - .env
     environment:
       - DATABASE_PATH=/app/data/osrs_events.db
+    labels:
+      - com.centurylinklabs.watchtower.enable=true

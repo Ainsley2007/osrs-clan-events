@@ -14,7 +14,7 @@ COPY . .
 # Build the binary
 # CGO_ENABLED=0 is default for pure Go, but good to be explicit.
 # modernc.org/sqlite is pure Go, so CGO_ENABLED=0 works fine.
-RUN CGO_ENABLED=0 GOOS=linux go build -o osrs-events cmd/osrs-events/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o osrs-events ./cmd/osrs-events
 
 # Final stage
 FROM alpine:latest
