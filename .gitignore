@@ -1,6 +1,6 @@
-# Binaries
+# Binaries (exclude only root-level binary, not cmd/osrs-events/)
 bin/
-osrs-events
+/osrs-events
 
 # Environment variables
 .env
