@@ -11,9 +11,9 @@ firebase-credentials.json
 *.db
 data/
 
-# Build output
+# Build output (exclude only root-level binary, not cmd/osrs-events/)
 bin/
-osrs-events
+/osrs-events
 
 # Editor and OS
 .vscode/
