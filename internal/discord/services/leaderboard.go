@@ -194,14 +194,7 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 		return entries[i].DiscordName < entries[j].DiscordName
 	})
 
-	// Assign ranks with ties
-	currentRank := 1
-	for i := range entries {
-		if i > 0 && entries[i].TotalPoints != entries[i-1].TotalPoints {
-			currentRank = i + 1
-		}
-		entries[i].CurrentRank = currentRank
-	}
+	assignRanks(entries)
 
 	var title, metricLabel, pointsLabel, thresholdLabel string
 	var color int
@@ -297,6 +290,16 @@ func buildBossDisplayName(event *database.Event) string {
 	return strings.Join(bossesToTrack, " + ")
 }
 
+func assignRanks(entries []LeaderboardEntry) {
+	currentRank := 1
+	for i := range entries {
+		if i > 0 && entries[i].TotalPoints != entries[i-1].TotalPoints {
+			currentRank = i + 1
+		}
+		entries[i].CurrentRank = currentRank
+	}
+}
+
 func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, guildID string, eventType string) (*discordgo.MessageEmbed, error) {
 	accounts, err := s.store.GetAccountsByGuild(ctx, guildID)
 	if err != nil {
@@ -362,14 +365,7 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 		return entries[i].DiscordName < entries[j].DiscordName
 	})
 
-	// Assign ranks with ties
-	currentRank := 1
-	for i := range entries {
-		if i > 0 && entries[i].TotalPoints != entries[i-1].TotalPoints {
-			currentRank = i + 1
-		}
-		entries[i].CurrentRank = currentRank
-	}
+	assignRanks(entries)
 
 	var title string
 	var color int
