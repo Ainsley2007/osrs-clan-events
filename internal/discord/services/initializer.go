@@ -11,14 +11,16 @@ import (
 )
 
 type InitializerService struct {
-	session *discordgo.Session
-	store   database.Store
+	session            *discordgo.Session
+	store              database.Store
+	leaderboardService *LeaderboardService
 }
 
-func NewInitializerService(session *discordgo.Session, store database.Store) *InitializerService {
+func NewInitializerService(session *discordgo.Session, store database.Store, leaderboardService *LeaderboardService) *InitializerService {
 	return &InitializerService{
-		session: session,
-		store:   store,
+		session:            session,
+		store:              store,
+		leaderboardService: leaderboardService,
 	}
 }
 
@@ -48,6 +50,12 @@ func (s *InitializerService) InitializeGuild(ctx context.Context, guildID string
 
 	if err := s.ensureMessages(ctx, guild); err != nil {
 		return fmt.Errorf("failed to ensure messages: %w", err)
+	}
+
+	// Refresh all leaderboards after ensuring messages exist
+	if err := s.refreshLeaderboards(ctx, guildID); err != nil {
+		log.Printf("[Guild %s] Failed to refresh leaderboards: %v", guildID, err)
+		// Don't fail initialization if leaderboard refresh fails
 	}
 
 	log.Printf("[Guild %s] Initialization complete", guildID)
@@ -152,28 +160,28 @@ func (s *InitializerService) ensureChannel(_ context.Context, guildID, name, par
 }
 
 func (s *InitializerService) ensureMessages(ctx context.Context, guild *database.Guild) error {
-	if err := s.ensureMessage(ctx, guild.GuildID, "BOTW Weekly", guild.BotwChannelID, &guild.BotwMsgID); err != nil {
+	if err := s.ensureMessage(ctx, guild.GuildID, "BOTW Weekly", "botw", "weekly", guild.BotwChannelID, &guild.BotwMsgID); err != nil {
 		return err
 	}
 	if err := s.store.SaveGuild(ctx, guild); err != nil {
 		return fmt.Errorf("failed to save guild after BOTW Weekly message: %w", err)
 	}
 
-	if err := s.ensureMessage(ctx, guild.GuildID, "BOTW Overall", guild.BotwOverallChannelID, &guild.BotwOverallMsgID); err != nil {
+	if err := s.ensureMessage(ctx, guild.GuildID, "BOTW Overall", "botw", "overall", guild.BotwOverallChannelID, &guild.BotwOverallMsgID); err != nil {
 		return err
 	}
 	if err := s.store.SaveGuild(ctx, guild); err != nil {
 		return fmt.Errorf("failed to save guild after BOTW Overall message: %w", err)
 	}
 
-	if err := s.ensureMessage(ctx, guild.GuildID, "SOTW Weekly", guild.SotwChannelID, &guild.SotwMsgID); err != nil {
+	if err := s.ensureMessage(ctx, guild.GuildID, "SOTW Weekly", "sotw", "weekly", guild.SotwChannelID, &guild.SotwMsgID); err != nil {
 		return err
 	}
 	if err := s.store.SaveGuild(ctx, guild); err != nil {
 		return fmt.Errorf("failed to save guild after SOTW Weekly message: %w", err)
 	}
 
-	if err := s.ensureMessage(ctx, guild.GuildID, "SOTW Overall", guild.SotwOverallChannelID, &guild.SotwOverallMsgID); err != nil {
+	if err := s.ensureMessage(ctx, guild.GuildID, "SOTW Overall", "sotw", "overall", guild.SotwOverallChannelID, &guild.SotwOverallMsgID); err != nil {
 		return err
 	}
 	if err := s.store.SaveGuild(ctx, guild); err != nil {
@@ -183,7 +191,7 @@ func (s *InitializerService) ensureMessages(ctx context.Context, guild *database
 	return nil
 }
 
-func (s *InitializerService) ensureMessage(_ context.Context, guildID, dashboardType, channelID string, messageID *string) error {
+func (s *InitializerService) ensureMessage(ctx context.Context, guildID, dashboardType, eventType, leaderboardType string, channelID string, messageID *string) error {
 	if *messageID != "" {
 		msg, err := s.session.ChannelMessage(channelID, *messageID)
 		if err == nil && msg != nil {
@@ -191,8 +199,10 @@ func (s *InitializerService) ensureMessage(_ context.Context, guildID, dashboard
 			return nil
 		}
 		log.Printf("[Guild %s] Message for %s (ID: %s) not found in Discord, recreating", guildID, dashboardType, *messageID)
+		*messageID = "" // Clear invalid message ID
 	}
 
+	// If message doesn't exist, create a placeholder first
 	embed := &discordgo.MessageEmbed{
 		Title:       fmt.Sprintf("%s Dashboard", dashboardType),
 		Description: "Dashboard will be updated when competition starts.",
@@ -206,5 +216,39 @@ func (s *InitializerService) ensureMessage(_ context.Context, guildID, dashboard
 
 	*messageID = msg.ID
 	log.Printf("[Guild %s] Created message for %s: %s", guildID, dashboardType, msg.ID)
+
+	// Now try to update with actual leaderboard data if available
+	if leaderboardType == "weekly" {
+		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, eventType); err == nil {
+			log.Printf("[Guild %s] Updated %s leaderboard with active event data", guildID, dashboardType)
+		}
+	} else {
+		// Overall leaderboard - always try to update (doesn't require active event)
+		if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, eventType); err == nil {
+			log.Printf("[Guild %s] Updated %s leaderboard", guildID, dashboardType)
+		}
+	}
+
+	return nil
+}
+
+func (s *InitializerService) refreshLeaderboards(ctx context.Context, guildID string) error {
+	// Update weekly leaderboards if active events exist
+	if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw"); err != nil {
+		// Log but don't fail - event might not exist
+		log.Printf("[Guild %s] Could not update BOTW weekly leaderboard: %v", guildID, err)
+	}
+	if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw"); err != nil {
+		log.Printf("[Guild %s] Could not update SOTW weekly leaderboard: %v", guildID, err)
+	}
+
+	// Always update overall leaderboards (they don't require active events)
+	if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "botw"); err != nil {
+		log.Printf("[Guild %s] Could not update BOTW overall leaderboard: %v", guildID, err)
+	}
+	if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "sotw"); err != nil {
+		log.Printf("[Guild %s] Could not update SOTW overall leaderboard: %v", guildID, err)
+	}
+
 	return nil
 }

@@ -75,9 +75,14 @@ func (s *SQLiteStore) init() error {
 			type TEXT,
 			week_number INTEGER,
 			metric_json_id TEXT,
+			bosses_to_track TEXT,
 			start_time DATETIME,
 			end_time DATETIME,
 			is_active BOOLEAN DEFAULT 1,
+			points_per_kc REAL,
+			points_per_xp REAL,
+			threshold_kc INTEGER,
+			xp_threshold INTEGER,
 			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
 		);`,
 		`CREATE TABLE IF NOT EXISTS snapshots (
@@ -250,6 +255,28 @@ func (s *SQLiteStore) GetActiveAccounts(ctx context.Context) ([]*Account, error)
 	return accounts, rows.Err()
 }
 
+func (s *SQLiteStore) GetAccountsByGuild(ctx context.Context, guildID string) ([]*Account, error) {
+	query := `SELECT DISTINCT a.id, a.rsn, a.discord_user_id, a.error_count, a.is_active 
+		FROM accounts a
+		INNER JOIN participants p ON a.discord_user_id = p.discord_user_id
+		WHERE p.guild_id = ? AND a.is_active = 1`
+	rows, err := s.db.QueryContext(ctx, query, guildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var accounts []*Account
+	for rows.Next() {
+		var acc Account
+		if err := rows.Scan(&acc.ID, &acc.RSN, &acc.DiscordUserID, &acc.ErrorCount, &acc.IsActive); err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, &acc)
+	}
+	return accounts, rows.Err()
+}
+
 func (s *SQLiteStore) GetAccountByRSN(ctx context.Context, rsn, discordUserID string) (*Account, error) {
 	query := `SELECT id, rsn, discord_user_id, error_count, is_active 
 		FROM accounts WHERE LOWER(rsn) = LOWER(?) AND discord_user_id = ?`
@@ -279,9 +306,9 @@ func (s *SQLiteStore) UpdateAccountRSN(ctx context.Context, id int64, newRSN str
 // Events
 func (s *SQLiteStore) SaveEvent(ctx context.Context, e *Event) error {
 	if e.ID == 0 {
-		query := `INSERT INTO events (guild_id, type, week_number, metric_json_id, start_time, end_time, is_active)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`
-		res, err := s.db.ExecContext(ctx, query, e.GuildID, e.Type, e.WeekNumber, e.MetricJsonID, e.StartTime, e.EndTime, e.IsActive)
+		query := `INSERT INTO events (guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		res, err := s.db.ExecContext(ctx, query, e.GuildID, e.Type, e.WeekNumber, e.MetricJsonID, e.BossesToTrack, e.StartTime, e.EndTime, e.IsActive, e.PointsPerKC, e.PointsPerXP, e.ThresholdKC, e.XPThreshold)
 		if err != nil {
 			return err
 		}
@@ -293,17 +320,17 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, e *Event) error {
 		return nil
 	}
 
-	query := `UPDATE events SET guild_id = ?, type = ?, week_number = ?, metric_json_id = ?, start_time = ?, end_time = ?, is_active = ?
+	query := `UPDATE events SET guild_id = ?, type = ?, week_number = ?, metric_json_id = ?, bosses_to_track = ?, start_time = ?, end_time = ?, is_active = ?, points_per_kc = ?, points_per_xp = ?, threshold_kc = ?, xp_threshold = ?
 		WHERE id = ?`
-	_, err := s.db.ExecContext(ctx, query, e.GuildID, e.Type, e.WeekNumber, e.MetricJsonID, e.StartTime, e.EndTime, e.IsActive, e.ID)
+	_, err := s.db.ExecContext(ctx, query, e.GuildID, e.Type, e.WeekNumber, e.MetricJsonID, e.BossesToTrack, e.StartTime, e.EndTime, e.IsActive, e.PointsPerKC, e.PointsPerXP, e.ThresholdKC, e.XPThreshold, e.ID)
 	return err
 }
 
 func (s *SQLiteStore) GetEvent(ctx context.Context, id int64) (*Event, error) {
-	query := `SELECT id, guild_id, type, week_number, metric_json_id, start_time, end_time, is_active FROM events WHERE id = ?`
+	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold FROM events WHERE id = ?`
 	var e Event
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
-		&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.StartTime, &e.EndTime, &e.IsActive,
+		&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.BossesToTrack, &e.StartTime, &e.EndTime, &e.IsActive, &e.PointsPerKC, &e.PointsPerXP, &e.ThresholdKC, &e.XPThreshold,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("event not found")
@@ -312,17 +339,53 @@ func (s *SQLiteStore) GetEvent(ctx context.Context, id int64) (*Event, error) {
 }
 
 func (s *SQLiteStore) GetActiveEvent(ctx context.Context, guildID string, eventType string) (*Event, error) {
-	query := `SELECT id, guild_id, type, week_number, metric_json_id, start_time, end_time, is_active
+	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
 		FROM events WHERE guild_id = ? AND type = ? AND is_active = 1 ORDER BY start_time DESC LIMIT 1`
 
 	var e Event
 	err := s.db.QueryRowContext(ctx, query, guildID, eventType).Scan(
-		&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.StartTime, &e.EndTime, &e.IsActive,
+		&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.BossesToTrack, &e.StartTime, &e.EndTime, &e.IsActive, &e.PointsPerKC, &e.PointsPerXP, &e.ThresholdKC, &e.XPThreshold,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("no active event found")
 	}
 	return &e, err
+}
+
+func (s *SQLiteStore) GetActiveEvents(ctx context.Context, guildID string, eventType string) ([]*Event, error) {
+	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
+		FROM events WHERE guild_id = ? AND type = ? AND is_active = 1 ORDER BY start_time DESC`
+
+	rows, err := s.db.QueryContext(ctx, query, guildID, eventType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []*Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.BossesToTrack, &e.StartTime, &e.EndTime, &e.IsActive, &e.PointsPerKC, &e.PointsPerXP, &e.ThresholdKC, &e.XPThreshold); err != nil {
+			return nil, err
+		}
+		events = append(events, &e)
+	}
+	return events, rows.Err()
+}
+
+func (s *SQLiteStore) CreateEvent(ctx context.Context, e *Event) error {
+	query := `INSERT INTO events (guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	res, err := s.db.ExecContext(ctx, query, e.GuildID, e.Type, e.WeekNumber, e.MetricJsonID, e.BossesToTrack, e.StartTime, e.EndTime, e.IsActive, e.PointsPerKC, e.PointsPerXP, e.ThresholdKC, e.XPThreshold)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	e.ID = id
+	return nil
 }
 
 // Snapshots
@@ -344,6 +407,20 @@ func (s *SQLiteStore) SaveSnapshot(ctx context.Context, snap *Snapshot) error {
 	query := `UPDATE snapshots SET event_id = ?, account_id = ?, start_value = ?, current_value = ? WHERE id = ?`
 	_, err := s.db.ExecContext(ctx, query, snap.EventID, snap.AccountID, snap.StartValue, snap.CurrentValue, snap.ID)
 	return err
+}
+
+func (s *SQLiteStore) CreateSnapshot(ctx context.Context, snap *Snapshot) error {
+	query := `INSERT INTO snapshots (event_id, account_id, start_value, current_value) VALUES (?, ?, ?, ?)`
+	res, err := s.db.ExecContext(ctx, query, snap.EventID, snap.AccountID, snap.StartValue, snap.CurrentValue)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	snap.ID = id
+	return nil
 }
 
 func (s *SQLiteStore) GetSnapshot(ctx context.Context, eventID, accountID int64) (*Snapshot, error) {
@@ -377,6 +454,178 @@ func (s *SQLiteStore) GetSnapshotsByEvent(ctx context.Context, eventID int64) ([
 		snapshots = append(snapshots, &snap)
 	}
 	return snapshots, rows.Err()
+}
+
+func (s *SQLiteStore) GetPendingStartEvents(ctx context.Context) ([]*Event, error) {
+	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
+		FROM events 
+		WHERE is_active = 1 
+		AND start_time <= datetime('now')
+		AND start_time >= datetime('now', '-10 minutes')
+		ORDER BY start_time ASC`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []*Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.BossesToTrack, &e.StartTime, &e.EndTime, &e.IsActive, &e.PointsPerKC, &e.PointsPerXP, &e.ThresholdKC, &e.XPThreshold); err != nil {
+			return nil, err
+		}
+		events = append(events, &e)
+	}
+	return events, rows.Err()
+}
+
+func (s *SQLiteStore) GetAllActiveEvents(ctx context.Context) ([]*Event, error) {
+	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
+		FROM events 
+		WHERE is_active = 1 
+		AND start_time <= datetime('now')
+		AND end_time > datetime('now', '+10 minutes')
+		ORDER BY guild_id, type`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []*Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.BossesToTrack, &e.StartTime, &e.EndTime, &e.IsActive, &e.PointsPerKC, &e.PointsPerXP, &e.ThresholdKC, &e.XPThreshold); err != nil {
+			return nil, err
+		}
+		events = append(events, &e)
+	}
+	return events, rows.Err()
+}
+
+func (s *SQLiteStore) UpdateSnapshotCurrentValue(ctx context.Context, snapshotID int64, currentValue int64) error {
+	query := `UPDATE snapshots SET current_value = ? WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, currentValue, snapshotID)
+	return err
+}
+
+func (s *SQLiteStore) DeactivateEvent(ctx context.Context, eventID int64) error {
+	query := `UPDATE events SET is_active = 0 WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, eventID)
+	return err
+}
+
+func (s *SQLiteStore) GetSnapshotsWithAccounts(ctx context.Context, eventID int64) ([]*SnapshotWithAccount, error) {
+	query := `SELECT s.id, s.event_id, s.account_id, s.start_value, s.current_value,
+		a.id, a.rsn, a.discord_user_id, a.error_count, a.is_active
+		FROM snapshots s
+		INNER JOIN accounts a ON s.account_id = a.id
+		WHERE s.event_id = ?`
+
+	rows, err := s.db.QueryContext(ctx, query, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*SnapshotWithAccount
+	for rows.Next() {
+		var snap Snapshot
+		var acc Account
+		if err := rows.Scan(
+			&snap.ID, &snap.EventID, &snap.AccountID, &snap.StartValue, &snap.CurrentValue,
+			&acc.ID, &acc.RSN, &acc.DiscordUserID, &acc.ErrorCount, &acc.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, &SnapshotWithAccount{
+			Snapshot: &snap,
+			Account:  &acc,
+		})
+	}
+	return results, rows.Err()
+}
+
+func (s *SQLiteStore) UpdateParticipantPoints(ctx context.Context, updates []*ParticipantPointUpdate) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `UPDATE participants SET total_points_botw = total_points_botw + ?, total_points_sotw = total_points_sotw + ? WHERE discord_user_id = ? AND guild_id = ?`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, update := range updates {
+		if _, err := stmt.ExecContext(ctx, update.BotwPoints, update.SotwPoints, update.DiscordUserID, update.GuildID); err != nil {
+			return fmt.Errorf("failed to update participant %s: %w", update.DiscordUserID, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (s *SQLiteStore) GetExpiringEvents(ctx context.Context) ([]*Event, error) {
+	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
+		FROM events 
+		WHERE is_active = 1 
+		AND end_time <= datetime('now', '+10 minutes')
+		AND end_time >= datetime('now', '-5 minutes')
+		ORDER BY end_time ASC`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []*Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.BossesToTrack, &e.StartTime, &e.EndTime, &e.IsActive, &e.PointsPerKC, &e.PointsPerXP, &e.ThresholdKC, &e.XPThreshold); err != nil {
+			return nil, err
+		}
+		events = append(events, &e)
+	}
+	return events, rows.Err()
+}
+
+func (s *SQLiteStore) GetStaleEvents(ctx context.Context) ([]*Event, error) {
+	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
+		FROM events 
+		WHERE is_active = 1 
+		AND end_time < datetime('now', '-5 minutes')
+		ORDER BY end_time ASC`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []*Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.BossesToTrack, &e.StartTime, &e.EndTime, &e.IsActive, &e.PointsPerKC, &e.PointsPerXP, &e.ThresholdKC, &e.XPThreshold); err != nil {
+			return nil, err
+		}
+		events = append(events, &e)
+	}
+	return events, rows.Err()
 }
 
 func (s *SQLiteStore) Close() error {

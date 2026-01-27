@@ -3,6 +3,7 @@ package discord
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -29,7 +30,6 @@ func (b *Bot) removeCommand() Command {
 			},
 		},
 		Handler: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			ctx := context.Background()
 			data := i.ApplicationCommandData()
 
 			if i.GuildID == "" {
@@ -51,22 +51,31 @@ func (b *Bot) removeCommand() Command {
 				return
 			}
 
-			if err := b.AccountService.RemoveAccount(ctx, targetUser, rsn); err != nil {
-				respondError(s, i.Interaction, err)
-				return
-			}
-
+			// Respond immediately to avoid timeout
 			var message string
 			if isOtherUser {
 				user, _ := s.User(targetUser)
-				message = fmt.Sprintf("✅ Removed RSN `%s` from <@%s>", rsn, user.ID)
-				b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s` from <@%s>", i.Member.User.ID, rsn, user.ID))
+				message = fmt.Sprintf("✅ Removing RSN `%s` from <@%s>...", rsn, user.ID)
 			} else {
-				message = fmt.Sprintf("✅ Removed RSN: `%s`", rsn)
-				b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s`", targetUser, rsn))
+				message = fmt.Sprintf("✅ Removing RSN: `%s`...", rsn)
 			}
-
 			respondSuccess(s, i.Interaction, message)
+
+			// Do heavy work asynchronously (leaderboard updates, logging)
+			go func() {
+				ctx := context.Background()
+				if err := b.AccountService.RemoveAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
+					log.Printf("Failed to remove account %s: %v", rsn, err)
+					return
+				}
+
+				if isOtherUser {
+					user, _ := s.User(targetUser)
+					b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s` from <@%s>", i.Member.User.ID, rsn, user.ID))
+				} else {
+					b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s`", targetUser, rsn))
+				}
+			}()
 		},
 	}
 }

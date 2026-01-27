@@ -3,6 +3,7 @@ package discord
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -28,7 +29,6 @@ func (b *Bot) addAccountCommand() Command {
 			},
 		},
 		Handler: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			ctx := context.Background()
 			data := i.ApplicationCommandData()
 
 			if i.GuildID == "" {
@@ -50,22 +50,31 @@ func (b *Bot) addAccountCommand() Command {
 				return
 			}
 
-			if err := b.AccountService.AddAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
-				respondError(s, i.Interaction, err)
-				return
-			}
-
+			// Respond immediately to avoid timeout
 			var message string
 			if isOtherUser {
 				user, _ := s.User(targetUser)
-				message = fmt.Sprintf("✅ Added RSN `%s` for <@%s>", rsn, user.ID)
-				b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s` for <@%s>", i.Member.User.ID, rsn, user.ID))
+				message = fmt.Sprintf("✅ Adding RSN `%s` for <@%s>...", rsn, user.ID)
 			} else {
-				message = fmt.Sprintf("✅ Added RSN: `%s`", rsn)
-				b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s`", targetUser, rsn))
+				message = fmt.Sprintf("✅ Adding RSN: `%s`...", rsn)
 			}
-
 			respondSuccess(s, i.Interaction, message)
+
+			// Do heavy work asynchronously (snapshots, leaderboard updates, logging)
+			go func() {
+				ctx := context.Background()
+				if err := b.AccountService.AddAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
+					log.Printf("Failed to add account %s: %v", rsn, err)
+					return
+				}
+
+				if isOtherUser {
+					user, _ := s.User(targetUser)
+					b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s` for <@%s>", i.Member.User.ID, rsn, user.ID))
+				} else {
+					b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s`", targetUser, rsn))
+				}
+			}()
 		},
 	}
 }

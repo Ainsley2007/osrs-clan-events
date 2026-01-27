@@ -7,18 +7,17 @@ import (
 )
 
 type Config struct {
-	DiscordToken        string
-	DatabaseURL         string
-	FirebaseCredentials string
+	DiscordToken                 string
+	DatabaseURL                  string
+	GoogleApplicationCredentials string
 }
 
 func Load() (*Config, error) {
-	// Load .env file if it exists, but don't fail if it doesn't (production might use real env vars)
 	_ = godotenv.Load()
 
 	return &Config{
-		DiscordToken:        os.Getenv("DISCORD_TOKEN"),
-		DatabaseURL:         os.Getenv("DATABASE_URL"),
-		FirebaseCredentials: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+		DiscordToken:                 os.Getenv("DISCORD_TOKEN"),
+		DatabaseURL:                  os.Getenv("DATABASE_URL"),
+		GoogleApplicationCredentials: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 	}, nil
 }

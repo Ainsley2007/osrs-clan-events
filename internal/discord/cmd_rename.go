@@ -3,6 +3,7 @@ package discord
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -35,7 +36,6 @@ func (b *Bot) renameCommand() Command {
 			},
 		},
 		Handler: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			ctx := context.Background()
 			data := i.ApplicationCommandData()
 
 			if i.GuildID == "" {
@@ -59,22 +59,31 @@ func (b *Bot) renameCommand() Command {
 				return
 			}
 
-			if err := b.AccountService.RenameAccount(ctx, targetUser, currentRSN, newRSN); err != nil {
-				respondError(s, i.Interaction, err)
-				return
-			}
-
+			// Respond immediately to avoid timeout
 			var message string
 			if isOtherUser {
 				user, _ := s.User(targetUser)
-				message = fmt.Sprintf("✅ Renamed `%s` to `%s` for <@%s>", currentRSN, newRSN, user.ID)
-				b.logAction(ctx, i.GuildID, fmt.Sprintf("✏️ <@%s> renamed account `%s` → `%s` for <@%s>", i.Member.User.ID, currentRSN, newRSN, user.ID))
+				message = fmt.Sprintf("✅ Renaming `%s` to `%s` for <@%s>...", currentRSN, newRSN, user.ID)
 			} else {
-				message = fmt.Sprintf("✅ Renamed `%s` to `%s`", currentRSN, newRSN)
-				b.logAction(ctx, i.GuildID, fmt.Sprintf("✏️ <@%s> renamed account `%s` → `%s`", targetUser, currentRSN, newRSN))
+				message = fmt.Sprintf("✅ Renaming `%s` to `%s`...", currentRSN, newRSN)
 			}
-
 			respondSuccess(s, i.Interaction, message)
+
+			// Do heavy work asynchronously (snapshots, leaderboard updates, logging)
+			go func() {
+				ctx := context.Background()
+				if err := b.AccountService.RenameAccount(ctx, targetUser, i.GuildID, currentRSN, newRSN); err != nil {
+					log.Printf("Failed to rename account %s to %s: %v", currentRSN, newRSN, err)
+					return
+				}
+
+				if isOtherUser {
+					user, _ := s.User(targetUser)
+					b.logAction(ctx, i.GuildID, fmt.Sprintf("✏️ <@%s> renamed account `%s` → `%s` for <@%s>", i.Member.User.ID, currentRSN, newRSN, user.ID))
+				} else {
+					b.logAction(ctx, i.GuildID, fmt.Sprintf("✏️ <@%s> renamed account `%s` → `%s`", targetUser, currentRSN, newRSN))
+				}
+			}()
 		},
 	}
 }

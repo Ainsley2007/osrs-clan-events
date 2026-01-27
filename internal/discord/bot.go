@@ -7,6 +7,8 @@ import (
 
 	"osrs-events/internal/database"
 	"osrs-events/internal/discord/services"
+	"osrs-events/internal/firebase"
+	"osrs-events/internal/osrs"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -17,27 +19,37 @@ type Bot struct {
 	GuildService       *services.GuildService
 	AccountService     *services.AccountService
 	InitializerService *services.InitializerService
+	EventService       *services.EventService
+	SnapshotService    *services.SnapshotService
+	LeaderboardService *services.LeaderboardService
 	Handlers           map[string]Command
 
 	mu             sync.Mutex
 	initInProgress map[string]bool
 }
 
-func New(token string, store database.Store) (*Bot, error) {
+func New(token string, store database.Store, osrsClient *osrs.Client, firebaseClient *firebase.RemoteConfigClient) (*Bot, error) {
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return nil, err
 	}
 
+	snapshotService := services.NewSnapshotService(store, osrsClient)
+	eventService := services.NewEventService(store, snapshotService, firebaseClient)
+	leaderboardService := services.NewLeaderboardService(store, dg)
+
 	bot := &Bot{
-		Session:        dg,
-		Store:          store,
-		GuildService:   services.NewGuildService(store),
-		AccountService: services.NewAccountService(store),
-		initInProgress: make(map[string]bool),
+		Session:            dg,
+		Store:              store,
+		GuildService:       services.NewGuildService(store),
+		AccountService:     services.NewAccountService(store, snapshotService, leaderboardService),
+		EventService:       eventService,
+		SnapshotService:    snapshotService,
+		LeaderboardService: leaderboardService,
+		initInProgress:     make(map[string]bool),
 	}
 
-	bot.InitializerService = services.NewInitializerService(dg, store)
+	bot.InitializerService = services.NewInitializerService(dg, store, leaderboardService)
 
 	bot.setupCommands()
 

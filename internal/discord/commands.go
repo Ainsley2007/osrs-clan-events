@@ -10,17 +10,14 @@ type Command struct {
 func (b *Bot) setupCommands() {
 	b.Handlers = make(map[string]Command)
 
-	// Register commands here
-	// To add a new command:
-	// 1. Create a new file (e.g. cmd_profile.go)
-	// 2. Define a method on Bot that returns a Command
-	// 3. Call b.registerCommand(b.profileCommand()) here
 	b.registerCommand(b.setupLoggingChannelCommand())
 	b.registerCommand(b.exitCommand())
 	b.registerCommand(b.addAccountCommand())
 	b.registerCommand(b.removeCommand())
 	b.registerCommand(b.trackedCommand())
 	b.registerCommand(b.renameCommand())
+	b.registerCommand(b.startCommand())
+	b.registerCommand(b.stopCommand())
 }
 
 func (b *Bot) registerCommand(cmd Command) {

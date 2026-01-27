@@ -4,16 +4,23 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"osrs-events/internal/database"
 )
 
 type AccountService struct {
-	store database.Store
+	store              database.Store
+	snapshotService    *SnapshotService
+	leaderboardService *LeaderboardService
 }
 
-func NewAccountService(store database.Store) *AccountService {
-	return &AccountService{store: store}
+func NewAccountService(store database.Store, snapshotService *SnapshotService, leaderboardService *LeaderboardService) *AccountService {
+	return &AccountService{
+		store:              store,
+		snapshotService:    snapshotService,
+		leaderboardService: leaderboardService,
+	}
 }
 
 func (s *AccountService) AddAccount(ctx context.Context, discordUserID, guildID, rsn string) error {
@@ -51,10 +58,81 @@ func (s *AccountService) AddAccount(ctx context.Context, discordUserID, guildID,
 		return fmt.Errorf("failed to add account: %w", err)
 	}
 
+	// Create snapshots for this new account for all active events in the guild
+	if err := s.createSnapshotsForActiveEvents(ctx, account, guildID); err != nil {
+		// Log error but don't fail account creation - snapshots can be created later
+		fmt.Printf("Warning: failed to create snapshots for new account %s: %v\n", rsn, err)
+	}
+
 	return nil
 }
 
-func (s *AccountService) RemoveAccount(ctx context.Context, discordUserID, rsn string) error {
+func (s *AccountService) createSnapshotsForActiveEvents(ctx context.Context, account *database.Account, guildID string) error {
+	// Get all active events for this guild
+	botwEvent, err := s.store.GetActiveEvent(ctx, guildID, "botw")
+	if err != nil {
+		if err.Error() != "no active event found" {
+			return fmt.Errorf("failed to get active BOTW event: %w", err)
+		}
+		// No active BOTW event, that's fine
+		botwEvent = nil
+	}
+
+	sotwEvent, err := s.store.GetActiveEvent(ctx, guildID, "sotw")
+	if err != nil {
+		if err.Error() != "no active event found" {
+			return fmt.Errorf("failed to get active SOTW event: %w", err)
+		}
+		// No active SOTW event, that's fine
+		sotwEvent = nil
+	}
+
+	// Use UTC for all time comparisons
+	now := time.Now().UTC()
+	createdAny := false
+
+	// Create snapshot for BOTW if active and has started
+	if botwEvent != nil {
+		// Compare in UTC
+		eventStartUTC := botwEvent.StartTime.UTC()
+		if eventStartUTC.Before(now) || eventStartUTC.Equal(now) {
+			fmt.Printf("Creating BOTW snapshot for account %s in Week %d event\n", account.RSN, botwEvent.WeekNumber)
+			if err := s.snapshotService.CreateSnapshotForAccount(ctx, botwEvent, account); err != nil {
+				return fmt.Errorf("failed to create BOTW snapshot: %w", err)
+			}
+			createdAny = true
+		} else {
+			fmt.Printf("BOTW Week %d event has not started yet (starts at %v UTC, now is %v UTC)\n", botwEvent.WeekNumber, eventStartUTC, now)
+		}
+	} else {
+		fmt.Printf("No active BOTW event found for guild %s\n", guildID)
+	}
+
+	// Create snapshot for SOTW if active and has started
+	if sotwEvent != nil {
+		// Compare in UTC
+		eventStartUTC := sotwEvent.StartTime.UTC()
+		if eventStartUTC.Before(now) || eventStartUTC.Equal(now) {
+			fmt.Printf("Creating SOTW snapshot for account %s in Week %d event\n", account.RSN, sotwEvent.WeekNumber)
+			if err := s.snapshotService.CreateSnapshotForAccount(ctx, sotwEvent, account); err != nil {
+				return fmt.Errorf("failed to create SOTW snapshot: %w", err)
+			}
+			createdAny = true
+		} else {
+			fmt.Printf("SOTW Week %d event has not started yet (starts at %v UTC, now is %v UTC)\n", sotwEvent.WeekNumber, eventStartUTC, now)
+		}
+	} else {
+		fmt.Printf("No active SOTW event found for guild %s\n", guildID)
+	}
+
+	if !createdAny {
+		fmt.Printf("No snapshots created for account %s - no active events that have started\n", account.RSN)
+	}
+
+	return nil
+}
+
+func (s *AccountService) RemoveAccount(ctx context.Context, discordUserID, guildID, rsn string) error {
 	rsn = strings.TrimSpace(rsn)
 	if rsn == "" {
 		return fmt.Errorf("RSN cannot be empty")
@@ -69,10 +147,16 @@ func (s *AccountService) RemoveAccount(ctx context.Context, discordUserID, rsn s
 		return fmt.Errorf("failed to remove account: %w", err)
 	}
 
+	// Update leaderboards after account removal
+	if err := s.updateLeaderboardsForGuild(ctx, guildID); err != nil {
+		// Log error but don't fail account removal
+		fmt.Printf("Warning: failed to update leaderboards after account removal: %v\n", err)
+	}
+
 	return nil
 }
 
-func (s *AccountService) RenameAccount(ctx context.Context, discordUserID, oldRSN, newRSN string) error {
+func (s *AccountService) RenameAccount(ctx context.Context, discordUserID, guildID, oldRSN, newRSN string) error {
 	oldRSN = strings.TrimSpace(oldRSN)
 	newRSN = strings.TrimSpace(newRSN)
 
@@ -87,6 +171,37 @@ func (s *AccountService) RenameAccount(ctx context.Context, discordUserID, oldRS
 
 	if err := s.store.UpdateAccountRSN(ctx, account.ID, newRSN); err != nil {
 		return fmt.Errorf("failed to rename account: %w", err)
+	}
+
+	// Update account RSN in memory for snapshot creation
+	account.RSN = newRSN
+
+	// Create snapshots for active events with the new RSN
+	// This will update existing snapshots or create new ones if needed
+	if err := s.createSnapshotsForActiveEvents(ctx, account, guildID); err != nil {
+		// Log error but don't fail rename - snapshots can be updated later
+		fmt.Printf("Warning: failed to create snapshots after rename: %v\n", err)
+	}
+
+	return nil
+}
+
+func (s *AccountService) updateLeaderboardsForGuild(ctx context.Context, guildID string) error {
+	// Update weekly leaderboards if active events exist
+	if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw"); err != nil {
+		// Log but don't fail - event might not exist
+		fmt.Printf("Warning: could not update BOTW weekly leaderboard: %v\n", err)
+	}
+	if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw"); err != nil {
+		fmt.Printf("Warning: could not update SOTW weekly leaderboard: %v\n", err)
+	}
+
+	// Always update overall leaderboards (they don't require active events)
+	if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "botw"); err != nil {
+		fmt.Printf("Warning: could not update BOTW overall leaderboard: %v\n", err)
+	}
+	if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "sotw"); err != nil {
+		fmt.Printf("Warning: could not update SOTW overall leaderboard: %v\n", err)
 	}
 
 	return nil
@@ -114,6 +229,12 @@ func (s *AccountService) ExitCompetition(ctx context.Context, discordUserID, gui
 
 	if err := s.store.DeleteParticipant(ctx, discordUserID, guildID); err != nil {
 		return fmt.Errorf("failed to exit competition: %w", err)
+	}
+
+	// Update leaderboards after exiting competition
+	if err := s.updateLeaderboardsForGuild(ctx, guildID); err != nil {
+		// Log error but don't fail exit - leaderboards can be updated later
+		fmt.Printf("Warning: failed to update leaderboards after exit: %v\n", err)
 	}
 
 	return nil

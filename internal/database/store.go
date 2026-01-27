@@ -38,14 +38,19 @@ type Account struct {
 }
 
 type Event struct {
-	ID           int64
-	GuildID      string
-	Type         string // 'botw' or 'sotw'
-	WeekNumber   int
-	MetricJsonID string // e.g. 'botw_vorkath'
-	StartTime    time.Time
-	EndTime      time.Time
-	IsActive     bool
+	ID            int64
+	GuildID       string
+	Type          string // 'botw' or 'sotw'
+	WeekNumber    int
+	MetricJsonID  string // e.g. 'botw_vorkath'
+	BossesToTrack string // JSON array of boss names for BOTW (e.g. ["Dagannoth Prime", "Dagannoth Rex", "Dagannoth Supreme"])
+	StartTime     time.Time
+	EndTime       time.Time
+	IsActive      bool
+	PointsPerKC   float64
+	PointsPerXP   float64
+	ThresholdKC   int
+	XPThreshold   int
 }
 
 type Snapshot struct {
@@ -54,6 +59,18 @@ type Snapshot struct {
 	AccountID    int64
 	StartValue   int64
 	CurrentValue int64
+}
+
+type SnapshotWithAccount struct {
+	Snapshot *Snapshot
+	Account  *Account
+}
+
+type ParticipantPointUpdate struct {
+	DiscordUserID string
+	GuildID       string
+	BotwPoints    int
+	SotwPoints    int
 }
 
 type Store interface {
@@ -70,6 +87,7 @@ type Store interface {
 	SaveAccount(ctx context.Context, acc *Account) error
 	GetAccount(ctx context.Context, id int64) (*Account, error)
 	GetAccountsByDiscordID(ctx context.Context, discordUserID string) ([]*Account, error)
+	GetAccountsByGuild(ctx context.Context, guildID string) ([]*Account, error)
 	GetAccountByRSN(ctx context.Context, rsn, discordUserID string) (*Account, error)
 	GetActiveAccounts(ctx context.Context) ([]*Account, error)
 	DeleteAccount(ctx context.Context, id int64) error
@@ -79,11 +97,24 @@ type Store interface {
 	SaveEvent(ctx context.Context, event *Event) error
 	GetEvent(ctx context.Context, id int64) (*Event, error)
 	GetActiveEvent(ctx context.Context, guildID string, eventType string) (*Event, error)
+	GetActiveEvents(ctx context.Context, guildID string, eventType string) ([]*Event, error)
+	CreateEvent(ctx context.Context, event *Event) error
+	GetPendingStartEvents(ctx context.Context) ([]*Event, error)
+	GetAllActiveEvents(ctx context.Context) ([]*Event, error)
+	GetExpiringEvents(ctx context.Context) ([]*Event, error)
+	GetStaleEvents(ctx context.Context) ([]*Event, error)
+	DeactivateEvent(ctx context.Context, eventID int64) error
 
 	// Snapshots
 	SaveSnapshot(ctx context.Context, snap *Snapshot) error
+	CreateSnapshot(ctx context.Context, snap *Snapshot) error
 	GetSnapshot(ctx context.Context, eventID, accountID int64) (*Snapshot, error)
 	GetSnapshotsByEvent(ctx context.Context, eventID int64) ([]*Snapshot, error)
+	UpdateSnapshotCurrentValue(ctx context.Context, snapshotID int64, currentValue int64) error
+	GetSnapshotsWithAccounts(ctx context.Context, eventID int64) ([]*SnapshotWithAccount, error)
+
+	// Points
+	UpdateParticipantPoints(ctx context.Context, updates []*ParticipantPointUpdate) error
 
 	Close() error
 }

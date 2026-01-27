@@ -16,8 +16,23 @@ func (b *Bot) logAction(ctx context.Context, guildID, message string) {
 	embed := &discordgo.MessageEmbed{
 		Description: message,
 		Color:       0x5865F2,
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}
 
 	b.Session.ChannelMessageSendEmbed(guild.LogChannelID, embed)
+}
+
+func logAction(s *discordgo.Session, channelID, title, description string, color int) {
+	if channelID == "" {
+		return
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       color,
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+	}
+
+	s.ChannelMessageSendEmbed(channelID, embed)
 }
