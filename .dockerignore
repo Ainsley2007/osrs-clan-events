@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Local env and secrets (never in the image)
+.env
+*.env.local
+firebase-credentials.json
+
+# Database files (bind-mounted at runtime)
+*.db
+data/
+
+# Build output
+bin/
+osrs-events
+
+# Editor and OS
+.vscode/
+.idea/
+.DS_Store
+
+# Go (we only need source for the build; vendor is optional)
+vendor/
+
+# Docs and tooling not needed in build
+*.md
+Makefile
+.cursor/
+
+# Tests (optional: exclude to shrink context)
+# *_test.go
