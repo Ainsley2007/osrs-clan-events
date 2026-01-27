@@ -8,29 +8,34 @@ import (
 
 	"osrs-events/internal/database"
 	"osrs-events/internal/discord"
-	"osrs-events/internal/discord/services"
 	"osrs-events/internal/osrs"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 type Scheduler struct {
-	store              database.Store
-	eventService       *services.EventService
-	snapshotService    *services.SnapshotService
-	leaderboardService *services.LeaderboardService
+	store              Store
+	eventService       EventService
+	snapshotService    SnapshotService
+	leaderboardService LeaderboardService
 	session            *discordgo.Session
+	clock              Clock
 	stopCompletion     chan struct{}
 	stopHourly         chan struct{}
 }
 
-func New(store database.Store, eventService *services.EventService, snapshotService *services.SnapshotService, leaderboardService *services.LeaderboardService, session *discordgo.Session) *Scheduler {
+func New(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, session *discordgo.Session) *Scheduler {
+	return NewWithClock(store, eventService, snapshotService, leaderboardService, session, realClock{})
+}
+
+func NewWithClock(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, session *discordgo.Session, clock Clock) *Scheduler {
 	return &Scheduler{
 		store:              store,
 		eventService:       eventService,
 		snapshotService:    snapshotService,
 		leaderboardService: leaderboardService,
 		session:            session,
+		clock:              clock,
 		stopCompletion:     make(chan struct{}),
 		stopHourly:         make(chan struct{}),
 	}
@@ -67,12 +72,12 @@ func (s *Scheduler) Stop() {
 }
 
 func (s *Scheduler) runCompletionCheck() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := s.clock.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker.C():
 			s.processEventCompletions()
 			s.processPendingEventStarts()
 		case <-s.stopCompletion:
@@ -232,12 +237,12 @@ func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
 }
 
 func (s *Scheduler) runHourlyUpdates() {
-	ticker := time.NewTicker(1 * time.Hour)
+	ticker := s.clock.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker.C():
 			s.updateActiveSnapshots()
 		case <-s.stopHourly:
 			log.Println("Hourly updater stopped")
