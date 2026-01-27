@@ -140,35 +140,6 @@ func (s *SnapshotService) fetchMetricValueForEvent(ctx context.Context, rsn stri
 	return 0, fmt.Errorf("invalid event type: %s", event.Type)
 }
 
-func (s *SnapshotService) fetchMetricValue(ctx context.Context, rsn, metricName, metricType string) (int64, error) {
-	stats, err := s.osrsClient.GetPlayerStats(ctx, rsn)
-	if err != nil {
-		return 0, err
-	}
-
-	metricNameLower := strings.ToLower(metricName)
-
-	if metricType == "skill" {
-		for _, skill := range stats.Skills {
-			if strings.ToLower(skill.Name) == metricNameLower {
-				return int64(skill.XP), nil
-			}
-		}
-		return 0, fmt.Errorf("skill %s not found", metricName)
-	}
-
-	if metricType == "boss" {
-		for _, activity := range stats.Activities {
-			if strings.ToLower(activity.Name) == metricNameLower {
-				return int64(activity.Score), nil
-			}
-		}
-		return 0, fmt.Errorf("boss %s not found", metricName)
-	}
-
-	return 0, fmt.Errorf("invalid metric type: %s", metricType)
-}
-
 type FailedAccountUpdate struct {
 	RSN   string
 	Error error

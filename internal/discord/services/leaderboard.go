@@ -15,12 +15,14 @@ import (
 type LeaderboardService struct {
 	store   database.Store
 	session *discordgo.Session
+	logger  Logger
 }
 
-func NewLeaderboardService(store database.Store, session *discordgo.Session) *LeaderboardService {
+func NewLeaderboardService(store database.Store, session *discordgo.Session, logger Logger) *LeaderboardService {
 	return &LeaderboardService{
 		store:   store,
 		session: session,
+		logger:  logger,
 	}
 }
 
@@ -73,6 +75,21 @@ func (s *LeaderboardService) UpdateWeeklyLeaderboard(ctx context.Context, guildI
 	}
 
 	return nil
+}
+
+func (s *LeaderboardService) RefreshLeaderboards(ctx context.Context, guildID string) {
+	if err := s.UpdateWeeklyLeaderboard(ctx, guildID, "botw"); err != nil {
+		s.logger.Printf("Failed to update BOTW weekly leaderboard: %v", err)
+	}
+	if err := s.UpdateWeeklyLeaderboard(ctx, guildID, "sotw"); err != nil {
+		s.logger.Printf("Failed to update SOTW weekly leaderboard: %v", err)
+	}
+	if err := s.UpdateOverallLeaderboard(ctx, guildID, "botw"); err != nil {
+		s.logger.Printf("Failed to update BOTW overall leaderboard: %v", err)
+	}
+	if err := s.UpdateOverallLeaderboard(ctx, guildID, "sotw"); err != nil {
+		s.logger.Printf("Failed to update SOTW overall leaderboard: %v", err)
+	}
 }
 
 func (s *LeaderboardService) UpdateOverallLeaderboard(ctx context.Context, guildID string, eventType string) error {
@@ -199,20 +216,7 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 		color = 0x00FF00
 		thresholdValue = event.ThresholdKC
 
-		// Parse bosses to track and format display name
-		var bossesToTrack []string
-		if err := json.Unmarshal([]byte(event.BossesToTrack), &bossesToTrack); err == nil && len(bossesToTrack) > 0 {
-			if len(bossesToTrack) > 1 {
-				// Multiple bosses - show all of them joined
-				bossDisplayName = strings.Join(bossesToTrack, " + ")
-			} else {
-				// Single boss - use the name as is
-				bossDisplayName = bossesToTrack[0]
-			}
-		} else {
-			// Fallback to MetricJsonID if parsing fails
-			bossDisplayName = event.MetricJsonID
-		}
+		bossDisplayName = buildBossDisplayName(event)
 	} else {
 		title = "📚 Skill of the Week - Weekly Leaderboard"
 		metricLabel = "Skill"
@@ -280,6 +284,17 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 		Description: description.String(),
 		Color:       color,
 	}, nil
+}
+
+func buildBossDisplayName(event *database.Event) string {
+	var bossesToTrack []string
+	if err := json.Unmarshal([]byte(event.BossesToTrack), &bossesToTrack); err != nil || len(bossesToTrack) == 0 {
+		return event.MetricJsonID
+	}
+	if len(bossesToTrack) == 1 {
+		return bossesToTrack[0]
+	}
+	return strings.Join(bossesToTrack, " + ")
 }
 
 func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, guildID string, eventType string) (*discordgo.MessageEmbed, error) {
