@@ -1,49 +1,69 @@
 package scheduler
 
 import (
+	"context"
 	"log"
 	"time"
 
-	"osrs-events/internal/database"
+	"github.com/bwmarrin/discordgo"
 )
 
 type Scheduler struct {
-	Store    database.Store
-	Interval time.Duration
-	stop     chan struct{}
+	store              Store
+	eventService       EventService
+	snapshotService    SnapshotService
+	leaderboardService LeaderboardService
+	initializerService InitializerService
+	session            *discordgo.Session
+	clock              Clock
+	stopCompletion     chan struct{}
+	stopHourly         chan struct{}
 }
 
-func New(store database.Store, interval time.Duration) *Scheduler {
+func New(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, initializerService InitializerService, session *discordgo.Session) *Scheduler {
+	return NewWithClock(store, eventService, snapshotService, leaderboardService, initializerService, session, realClock{})
+}
+
+func NewWithClock(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, initializerService InitializerService, session *discordgo.Session, clock Clock) *Scheduler {
 	return &Scheduler{
-		Store:    store,
-		Interval: interval,
-		stop:     make(chan struct{}),
+		store:              store,
+		eventService:       eventService,
+		snapshotService:    snapshotService,
+		leaderboardService: leaderboardService,
+		initializerService: initializerService,
+		session:            session,
+		clock:              clock,
+		stopCompletion:     make(chan struct{}),
+		stopHourly:         make(chan struct{}),
 	}
 }
 
 func (s *Scheduler) Start() {
-	ticker := time.NewTicker(s.Interval)
+	log.Println("Starting scheduler...")
+
+	// Process stale events synchronously on startup (events that ended while bot was offline)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	staleEvents, err := s.store.GetStaleEvents(ctx)
+	cancel()
+	if err != nil {
+		log.Printf("Error getting stale events on startup: %v", err)
+	} else if len(staleEvents) > 0 {
+		log.Printf("Found %d stale events to process on startup", len(staleEvents))
+		s.processEventCompletionsForEvents(staleEvents)
+	}
+
+	// Take initial snapshot update for all active events asynchronously (don't block startup)
 	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				s.updateUserData()
-			case <-s.stop:
-				ticker.Stop()
-				return
-			}
-		}
+		log.Println("Taking initial snapshot update for active events...")
+		s.updateActiveSnapshots()
 	}()
+
+	go s.runCompletionCheck()
+	go s.runHourlyUpdates()
 }
 
 func (s *Scheduler) Stop() {
-	close(s.stop)
-}
-
-func (s *Scheduler) updateUserData() {
-	log.Println("Starting periodic user data update...")
-	// Logic to fetch users from DB, call external API, and update DB
-	// users, err := s.Store.GetUsers(context.Background()) ...
-
-	log.Println("Periodic update completed.")
+	log.Println("Stopping scheduler...")
+	close(s.stopCompletion)
+	close(s.stopHourly)
 }
