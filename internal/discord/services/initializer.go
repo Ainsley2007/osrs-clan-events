@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"osrs-events/internal/database"
 
@@ -101,6 +102,46 @@ func (s *InitializerService) ensureCategory(_ context.Context, guildID, name str
 	*categoryID = channel.ID
 	log.Printf("[Guild %s] Created category %s: %s", guildID, name, channel.ID)
 	return nil
+}
+
+// RenameCategory renames a Discord category channel
+func (s *InitializerService) RenameCategory(ctx context.Context, guildID, categoryID, newName string) error {
+	if categoryID == "" {
+		return fmt.Errorf("category ID is empty")
+	}
+
+	_, err := s.session.ChannelEdit(categoryID, &discordgo.ChannelEdit{
+		Name: newName,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to rename category %s to %s: %w", categoryID, newName, err)
+	}
+
+	log.Printf("[Guild %s] Renamed category %s to %s", guildID, categoryID, newName)
+	return nil
+}
+
+// RenameCategoryForEvent renames the category based on the event type and metric name
+func (s *InitializerService) RenameCategoryForEvent(ctx context.Context, guild *database.Guild, eventType string, event *database.Event) error {
+	var categoryID string
+	var displayName string
+
+	if eventType == "botw" {
+		categoryID = guild.BotwCategoryID
+		// Use the boss name (MetricJsonID), not the tracked bosses
+		displayName = event.MetricJsonID
+	} else {
+		categoryID = guild.SotwCategoryID
+		displayName = event.MetricJsonID
+	}
+
+	if categoryID == "" {
+		return nil // No category to rename
+	}
+
+	// Format: ╔═══BOTW - Vorkath═══╗ or ╔═══SOTW - Mining═══╗
+	newName := fmt.Sprintf("╔═══%s - %s═══╗", strings.ToUpper(eventType), displayName)
+	return s.RenameCategory(ctx, guild.GuildID, categoryID, newName)
 }
 
 func (s *InitializerService) ensureChannels(ctx context.Context, guild *database.Guild) error {

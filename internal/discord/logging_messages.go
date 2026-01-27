@@ -14,7 +14,7 @@ func SendCompetitionStartedLog(s *discordgo.Session, channelID string, botwBoss,
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "✅ Competitions Started",
+		Title: "✅ Competitions Started",
 		Description: fmt.Sprintf("**BOTW:** %s (Week %d)\n**SOTW:** %s (Week %d)\n**Duration:** 7 days\n\nStarted by: <@%s>",
 			botwBoss, botwWeek, sotwSkill, sotwWeek, startedBy),
 		Color:     0x00AA00,
@@ -40,7 +40,7 @@ func SendCompetitionStoppedLog(s *discordgo.Session, channelID string, stoppedEv
 		Title:       "🛑 Competitions Stopped",
 		Description: description,
 		Color:       0xFF6600,
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}
 
 	s.ChannelMessageSendEmbed(channelID, embed)
@@ -59,7 +59,7 @@ func SendEventCompletedLog(s *discordgo.Session, channelID string, eventType, me
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("✅ %s Completed", eventDisplayName),
+		Title: fmt.Sprintf("✅ %s Completed", eventDisplayName),
 		Description: fmt.Sprintf("**%s:** %s\n**Week:** %d\n**Status:** Points calculated, rolling over to next competition",
 			getMetricLabel(eventType), metricName, weekNumber),
 		Color:     0x00AA00,
@@ -82,7 +82,7 @@ func SendNewCompetitionStartedLog(s *discordgo.Session, channelID string, eventT
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("🎯 New %s Started", eventDisplayName),
+		Title: fmt.Sprintf("🎯 New %s Started", eventDisplayName),
 		Description: fmt.Sprintf("**%s:** %s\n**Week:** %d\n**Status:** Competition started automatically",
 			getMetricLabel(eventType), metricName, weekNumber),
 		Color:     0x00AA00,
@@ -101,7 +101,7 @@ func SendAccountNotFoundLog(s *discordgo.Session, channelID string, rsn string) 
 		Title:       "⚠️ Account Not Found",
 		Description: fmt.Sprintf("Failed to fetch stats for account **%s**.\nThe account may have been renamed or deleted from the OSRS Hiscores.", rsn),
 		Color:       0xFF9900,
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}
 
 	s.ChannelMessageSendEmbed(channelID, embed)
@@ -142,7 +142,7 @@ func SendRolloverCompleteLog(s *discordgo.Session, channelID string, completedEv
 		Title:       "🔄 Weekly Rollover Complete",
 		Description: description.String(),
 		Color:       0x00AA00,
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}
 
 	s.ChannelMessageSendEmbed(channelID, embed)

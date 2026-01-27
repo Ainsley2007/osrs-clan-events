@@ -34,15 +34,16 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 		return nil, err
 	}
 
+	logger := log.Default()
 	snapshotService := services.NewSnapshotService(store, osrsClient)
 	eventService := services.NewEventService(store, snapshotService, firebaseClient)
-	leaderboardService := services.NewLeaderboardService(store, dg)
+	leaderboardService := services.NewLeaderboardService(store, dg, logger)
 
 	bot := &Bot{
 		Session:            dg,
 		Store:              store,
 		GuildService:       services.NewGuildService(store),
-		AccountService:     services.NewAccountService(store, snapshotService, leaderboardService),
+		AccountService:     services.NewAccountService(store, snapshotService, leaderboardService, logger),
 		EventService:       eventService,
 		SnapshotService:    snapshotService,
 		LeaderboardService: leaderboardService,
