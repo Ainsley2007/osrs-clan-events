@@ -26,17 +26,31 @@ func (b *Bot) handleStart(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		return
 	}
 
+	// Defer immediately so Discord gets a response within the 3s window; all other work runs in the goroutine.
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "⏳ Starting BOTW and SOTW...",
+		},
+	}); err != nil {
+		log.Printf("Failed to defer start interaction: %v", err)
+		return
+	}
+
+	go b.runStartAndEditReply(s, i)
+}
+
+func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	ctx := context.Background()
 
 	activeBotwEvents, err := b.Store.GetActiveEvents(ctx, i.GuildID, "botw")
 	if err == nil && len(activeBotwEvents) > 0 {
-		respondError(s, i.Interaction, errors.New("⏰ BOTW competition is already running! Use /stop first"))
+		editDeferredWithError(s, i.Interaction, errors.New("⏰ BOTW competition is already running! Use /stop first"))
 		return
 	}
-
 	activeSotwEvents, err := b.Store.GetActiveEvents(ctx, i.GuildID, "sotw")
 	if err == nil && len(activeSotwEvents) > 0 {
-		respondError(s, i.Interaction, errors.New("⏰ SOTW competition is already running! Use /stop first"))
+		editDeferredWithError(s, i.Interaction, errors.New("⏰ SOTW competition is already running! Use /stop first"))
 		return
 	}
 
@@ -44,18 +58,48 @@ func (b *Bot) handleStart(s *discordgo.Session, i *discordgo.InteractionCreate) 
 
 	botwResult, err := b.EventService.StartBotw(ctx, i.GuildID, startTime)
 	if err != nil {
-		respondError(s, i.Interaction, fmt.Errorf("failed to start BOTW: %w", err))
+		editDeferredWithError(s, i.Interaction, fmt.Errorf("failed to start BOTW: %w", err))
 		return
 	}
 
 	sotwResult, err := b.EventService.StartSotw(ctx, i.GuildID, startTime)
 	if err != nil {
-		respondError(s, i.Interaction, fmt.Errorf("failed to start SOTW: %w", err))
+		editDeferredWithError(s, i.Interaction, fmt.Errorf("failed to start SOTW: %w", err))
 		return
 	}
 
-	// Respond immediately to avoid timeout, then do heavy work asynchronously
-	responseEmbed := &discordgo.MessageEmbed{
+	// Update weekly leaderboards
+	if err := b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw"); err != nil {
+		log.Printf("Failed to update BOTW weekly leaderboard: %v", err)
+	}
+	if err := b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw"); err != nil {
+		log.Printf("Failed to update SOTW weekly leaderboard: %v", err)
+	}
+
+	// Update overall leaderboards
+	if err := b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw"); err != nil {
+		log.Printf("Failed to update BOTW overall leaderboard: %v", err)
+	}
+	if err := b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw"); err != nil {
+		log.Printf("Failed to update SOTW overall leaderboard: %v", err)
+	}
+
+	guild, err := b.Store.GetGuild(ctx, i.GuildID)
+	if err == nil {
+		if err := b.InitializerService.RenameCategoryForEvent(ctx, guild, "botw", botwResult.Event); err != nil {
+			log.Printf("Failed to rename BOTW category: %v", err)
+		}
+		if err := b.InitializerService.RenameCategoryForEvent(ctx, guild, "sotw", sotwResult.Event); err != nil {
+			log.Printf("Failed to rename SOTW category: %v", err)
+		}
+		if guild.LogChannelID != "" {
+			SendCompetitionStartedLog(s, guild.LogChannelID, botwResult.MetricName, sotwResult.MetricName,
+				botwResult.Event.WeekNumber, sotwResult.Event.WeekNumber, i.Member.User.ID)
+		}
+	}
+
+	// Edit deferred reply with success embed
+	embed := &discordgo.MessageEmbed{
 		Title: "✅ Weekly Competitions Started!",
 		Description: fmt.Sprintf("**BOTW:** %s\n**SOTW:** %s\n**Start:** %s\n**End:** %s\n\nInitial snapshots and leaderboards are being updated...",
 			botwResult.MetricName,
@@ -65,48 +109,15 @@ func (b *Bot) handleStart(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		Color:     0x00AA00,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
+	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{embed}}); err != nil {
+		log.Printf("Failed to edit deferred start response: %v", err)
+	}
+}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{responseEmbed},
-		},
-	})
-
-	// Do heavy work asynchronously after responding
-	go func() {
-		ctx := context.Background()
-
-		// Update weekly leaderboards
-		if err := b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw"); err != nil {
-			log.Printf("Failed to update BOTW weekly leaderboard: %v", err)
-		}
-		if err := b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw"); err != nil {
-			log.Printf("Failed to update SOTW weekly leaderboard: %v", err)
-		}
-
-		// Update overall leaderboards
-		if err := b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw"); err != nil {
-			log.Printf("Failed to update BOTW overall leaderboard: %v", err)
-		}
-		if err := b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw"); err != nil {
-			log.Printf("Failed to update SOTW overall leaderboard: %v", err)
-		}
-
-		guild, err := b.Store.GetGuild(ctx, i.GuildID)
-		if err == nil {
-			// Rename categories with new event names
-			if err := b.InitializerService.RenameCategoryForEvent(ctx, guild, "botw", botwResult.Event); err != nil {
-				log.Printf("Failed to rename BOTW category: %v", err)
-			}
-			if err := b.InitializerService.RenameCategoryForEvent(ctx, guild, "sotw", sotwResult.Event); err != nil {
-				log.Printf("Failed to rename SOTW category: %v", err)
-			}
-
-			if guild.LogChannelID != "" {
-				SendCompetitionStartedLog(s, guild.LogChannelID, botwResult.MetricName, sotwResult.MetricName,
-					botwResult.Event.WeekNumber, sotwResult.Event.WeekNumber, i.Member.User.ID)
-			}
-		}
-	}()
+func editDeferredWithError(s *discordgo.Session, i *discordgo.Interaction, err error) {
+	log.Printf("Error handling start interaction: %v", err)
+	content := fmt.Sprintf("❌ An error occurred: %v", err)
+	if _, e := s.InteractionResponseEdit(i, &discordgo.WebhookEdit{Content: &content}); e != nil {
+		log.Printf("Failed to edit deferred start error response: %v", e)
+	}
 }
