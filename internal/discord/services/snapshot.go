@@ -386,8 +386,8 @@ func (s *SnapshotService) UpdateSnapshotsForEvents(ctx context.Context, events [
 			} else {
 				snapshot := &database.Snapshot{
 					EventID:      sd.event.ID,
-					AccountID:   accSnap.account.ID,
-					StartValue:  value,
+					AccountID:    accSnap.account.ID,
+					StartValue:   value,
 					CurrentValue: value,
 				}
 				if err := s.store.CreateSnapshot(ctx, snapshot); err != nil {
@@ -441,35 +441,50 @@ func (s *SnapshotService) CalculateAndAwardPoints(ctx context.Context, event *da
 		return fmt.Errorf("failed to get snapshots with accounts: %w", err)
 	}
 
-	pointUpdates := make(map[string]*database.ParticipantPointUpdate)
-
+	// Aggregate total gain per participant (Discord user + guild); one user can have multiple accounts.
+	type participantKey struct {
+		discordUserID string
+		guildID       string
+	}
+	totalGainByParticipant := make(map[participantKey]int64)
 	for _, swa := range snapshotsWithAccounts {
 		gain := swa.Snapshot.CurrentValue - swa.Snapshot.StartValue
 		if gain < 0 {
 			gain = 0
 		}
+		key := participantKey{swa.Account.DiscordUserID, event.GuildID}
+		totalGainByParticipant[key] += gain
+	}
 
+	var threshold int64
+	if event.Type == "botw" {
+		threshold = int64(event.ThresholdKC)
+	} else {
+		threshold = int64(event.XPThreshold)
+	}
+
+	pointUpdates := make(map[string]*database.ParticipantPointUpdate)
+	for key, totalGain := range totalGainByParticipant {
+		if totalGain < threshold {
+			continue
+		}
 		var points int
 		if event.Type == "botw" {
-			points = int(float64(gain) * event.PointsPerKC)
+			points = int(float64(totalGain) * event.PointsPerKC)
 		} else {
-			points = int(float64(gain) * event.PointsPerXP)
+			points = int(float64(totalGain) * event.PointsPerXP)
 		}
-
-		key := swa.Account.DiscordUserID + ":" + event.GuildID
-		if _, exists := pointUpdates[key]; !exists {
-			pointUpdates[key] = &database.ParticipantPointUpdate{
-				DiscordUserID: swa.Account.DiscordUserID,
-				GuildID:       event.GuildID,
-				BotwPoints:    0,
-				SotwPoints:    0,
-			}
+		updateKey := key.discordUserID + ":" + key.guildID
+		pointUpdates[updateKey] = &database.ParticipantPointUpdate{
+			DiscordUserID: key.discordUserID,
+			GuildID:       key.guildID,
+			BotwPoints:    0,
+			SotwPoints:    0,
 		}
-
 		if event.Type == "botw" {
-			pointUpdates[key].BotwPoints += points
+			pointUpdates[updateKey].BotwPoints = points
 		} else {
-			pointUpdates[key].SotwPoints += points
+			pointUpdates[updateKey].SotwPoints = points
 		}
 	}
 
