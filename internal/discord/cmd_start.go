@@ -98,18 +98,9 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 		}
 	}
 
-	// Edit deferred reply with success embed
-	embed := &discordgo.MessageEmbed{
-		Title: "✅ Weekly Competitions Started!",
-		Description: fmt.Sprintf("**BOTW:** %s\n**SOTW:** %s\n**Start:** %s\n**End:** %s\n\nInitial snapshots and leaderboards are being updated...",
-			botwResult.MetricName,
-			sotwResult.MetricName,
-			startTime.Format("Jan 02, 2006 15:04"),
-			botwResult.Event.EndTime.Format("Jan 02, 2006 15:04")),
-		Color:     0x00AA00,
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-	}
-	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{embed}}); err != nil {
+	// Edit deferred reply with simple success message
+	content := "✅ Weekly competitions started successfully!"
+	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content}); err != nil {
 		log.Printf("Failed to edit deferred start response: %v", err)
 	}
 }
