@@ -43,7 +43,11 @@ func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime 
 		return nil, fmt.Errorf("⏰ A BOTW competition is already running!")
 	}
 
-	bossConfig, err := s.firebaseClient.GetRandomBoss(ctx)
+	previousBoss := ""
+	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "botw"); err == nil && len(events) > 0 {
+		previousBoss = events[0].MetricJsonID
+	}
+	bossConfig, err := s.firebaseClient.GetRandomBoss(ctx, previousBoss)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch random boss: %w", err)
 	}
@@ -103,7 +107,11 @@ func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime 
 		return nil, fmt.Errorf("⏰ A SOTW competition is already running!")
 	}
 
-	skillConfig, err := s.firebaseClient.GetRandomSkill(ctx)
+	previousSkill := ""
+	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "sotw"); err == nil && len(events) > 0 {
+		previousSkill = events[0].MetricJsonID
+	}
+	skillConfig, err := s.firebaseClient.GetRandomSkill(ctx, previousSkill)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch random skill: %w", err)
 	}
