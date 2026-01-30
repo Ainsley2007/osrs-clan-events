@@ -62,17 +62,20 @@ func (s *Scheduler) updateActiveSnapshots() {
 		return
 	}
 
-	// Log 404 errors to log channel per guild
-	for guildID, guild := range guildsMap {
-		if guild.LogChannelID != "" {
-			for _, failed := range failedUpdates {
-				var notFoundErr *osrs.PlayerNotFoundError
-				if errors.As(failed.Error, &notFoundErr) {
-					discord.SendAccountNotFoundLog(s.session, guild.LogChannelID, failed.RSN)
-				}
-			}
+	// Log 404 errors to the log channel of the guild the account belongs to only
+	for _, failed := range failedUpdates {
+		var notFoundErr *osrs.PlayerNotFoundError
+		if !errors.As(failed.Error, &notFoundErr) {
+			continue
 		}
+		guild := guildsMap[failed.GuildID]
+		if guild == nil || guild.LogChannelID == "" {
+			continue
+		}
+		discord.SendAccountNotFoundLog(s.session, guild.LogChannelID, failed.RSN)
+	}
 
+	for guildID := range guildsMap {
 		// Update weekly leaderboards for this guild
 		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw"); err != nil {
 			log.Printf("Failed to update BOTW weekly leaderboard for guild %s: %v", guildID, err)

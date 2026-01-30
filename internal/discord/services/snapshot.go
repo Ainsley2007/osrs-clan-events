@@ -250,8 +250,9 @@ func (s *SnapshotService) fetchMetricValueForEvent(ctx context.Context, rsn stri
 }
 
 type FailedAccountUpdate struct {
-	RSN   string
-	Error error
+	RSN     string
+	GuildID string // guild the account/participant belongs to
+	Error   error
 }
 
 func (s *SnapshotService) UpdateSnapshotsForEvent(ctx context.Context, event *database.Event) ([]FailedAccountUpdate, error) {
@@ -271,8 +272,9 @@ func (s *SnapshotService) UpdateSnapshotsForEvent(ctx context.Context, event *da
 		currentValue, err := s.fetchMetricValueForEvent(ctx, account.RSN, event)
 		if err != nil {
 			failedUpdates = append(failedUpdates, FailedAccountUpdate{
-				RSN:   account.RSN,
-				Error: err,
+				RSN:     account.RSN,
+				GuildID: event.GuildID,
+				Error:   err,
 			})
 			continue
 		}
@@ -362,10 +364,19 @@ func (s *SnapshotService) UpdateSnapshotsForEvents(ctx context.Context, events [
 	for accountID, accSnap := range accountSnapshotsMap {
 		stats, err := s.osrsClient.GetPlayerStats(ctx, accSnap.account.RSN)
 		if err != nil {
-			failedUpdates = append(failedUpdates, FailedAccountUpdate{
-				RSN:   accSnap.account.RSN,
-				Error: err,
-			})
+			// Same account can be on multiple servers; one FailedAccountUpdate per guild (from this batch's events)
+			seen := make(map[string]struct{})
+			for _, sd := range accSnap.snapshots {
+				gid := sd.event.GuildID
+				if _, ok := seen[gid]; !ok {
+					seen[gid] = struct{}{}
+					failedUpdates = append(failedUpdates, FailedAccountUpdate{
+						RSN:     accSnap.account.RSN,
+						GuildID: gid,
+						Error:   err,
+					})
+				}
+			}
 			continue
 		}
 
@@ -373,8 +384,9 @@ func (s *SnapshotService) UpdateSnapshotsForEvents(ctx context.Context, events [
 			value, err := s.extractMetricValueFromStats(stats, sd.event)
 			if err != nil {
 				failedUpdates = append(failedUpdates, FailedAccountUpdate{
-					RSN:   accSnap.account.RSN,
-					Error: fmt.Errorf("failed to extract metric for event %d: %w", sd.event.ID, err),
+					RSN:     accSnap.account.RSN,
+					GuildID: sd.event.GuildID,
+					Error:   fmt.Errorf("failed to extract metric for event %d: %w", sd.event.ID, err),
 				})
 				continue
 			}
