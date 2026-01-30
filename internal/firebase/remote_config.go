@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strings"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/remoteconfig"
@@ -68,7 +69,7 @@ func (rc *RemoteConfigClient) FetchOSRSConfig(ctx context.Context) (*OSRSConfig,
 	}, nil
 }
 
-func (rc *RemoteConfigClient) GetRandomBoss(ctx context.Context) (*BossConfig, error) {
+func (rc *RemoteConfigClient) GetRandomBoss(ctx context.Context, excludeName string) (*BossConfig, error) {
 	config, err := rc.FetchOSRSConfig(ctx)
 	if err != nil {
 		return nil, err
@@ -78,11 +79,23 @@ func (rc *RemoteConfigClient) GetRandomBoss(ctx context.Context) (*BossConfig, e
 		return nil, fmt.Errorf("no bosses configured in remote config")
 	}
 
-	randomIndex := rand.Intn(len(config.Bosses))
-	return &config.Bosses[randomIndex], nil
+	pool := config.Bosses
+	if excludeName != "" {
+		pool = make([]BossConfig, 0, len(config.Bosses))
+		for _, b := range config.Bosses {
+			if !strings.EqualFold(b.Name, excludeName) {
+				pool = append(pool, b)
+			}
+		}
+		if len(pool) == 0 {
+			pool = config.Bosses
+		}
+	}
+
+	return &pool[rand.Intn(len(pool))], nil
 }
 
-func (rc *RemoteConfigClient) GetRandomSkill(ctx context.Context) (*SkillConfig, error) {
+func (rc *RemoteConfigClient) GetRandomSkill(ctx context.Context, excludeName string) (*SkillConfig, error) {
 	config, err := rc.FetchOSRSConfig(ctx)
 	if err != nil {
 		return nil, err
@@ -92,6 +105,18 @@ func (rc *RemoteConfigClient) GetRandomSkill(ctx context.Context) (*SkillConfig,
 		return nil, fmt.Errorf("no skills configured in remote config")
 	}
 
-	randomIndex := rand.Intn(len(config.Skills))
-	return &config.Skills[randomIndex], nil
+	pool := config.Skills
+	if excludeName != "" {
+		pool = make([]SkillConfig, 0, len(config.Skills))
+		for _, sk := range config.Skills {
+			if !strings.EqualFold(sk.Name, excludeName) {
+				pool = append(pool, sk)
+			}
+		}
+		if len(pool) == 0 {
+			pool = config.Skills
+		}
+	}
+
+	return &pool[rand.Intn(len(pool))], nil
 }

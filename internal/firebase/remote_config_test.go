@@ -115,7 +115,7 @@ func TestGetRandomBoss(t *testing.T) {
 		t.Fatalf("failed to initialize Remote Config client: %v", err)
 	}
 
-	boss, err := rcClient.GetRandomBoss(ctx)
+	boss, err := rcClient.GetRandomBoss(ctx, "")
 	if err != nil {
 		t.Fatalf("failed to get random boss: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestGetRandomSkill(t *testing.T) {
 		t.Fatalf("failed to initialize Remote Config client: %v", err)
 	}
 
-	skill, err := rcClient.GetRandomSkill(ctx)
+	skill, err := rcClient.GetRandomSkill(ctx, "")
 	if err != nil {
 		t.Fatalf("failed to get random skill: %v", err)
 	}
