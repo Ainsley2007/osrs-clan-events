@@ -32,6 +32,7 @@ func (b *Bot) handleStart(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: "⏳ Starting BOTW and SOTW...",
+			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	}); err != nil {
 		log.Printf("Failed to defer start interaction: %v", err)

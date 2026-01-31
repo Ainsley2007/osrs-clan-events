@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -46,7 +45,7 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// Build response message immediately
+	// Build stopped events for logging (detailed info goes to logging channel only)
 	var stoppedEvents []string
 	for _, event := range activeBotwEvents {
 		stoppedEvents = append(stoppedEvents, fmt.Sprintf("**BOTW:** %s (Week %d)", event.MetricJsonID, event.WeekNumber))
@@ -55,23 +54,11 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		stoppedEvents = append(stoppedEvents, fmt.Sprintf("**SOTW:** %s (Week %d)", event.MetricJsonID, event.WeekNumber))
 	}
 
-	description := "**Stopped:**\n"
-	for _, eventDesc := range stoppedEvents {
-		description += eventDesc + "\n"
-	}
-	description += "\n✅ Stopping competitions and calculating points...\n💡 Use `/start` to begin new competitions"
-
-	responseEmbed := &discordgo.MessageEmbed{
-		Title:       "🛑 Competitions Stopped",
-		Description: description,
-		Color:       0xFF6600,
-		Timestamp:   time.Now().UTC().Format(time.RFC3339),
-	}
-
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{responseEmbed},
+			Content: "✅ Weekly competitions stopped successfully!",
+			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
 
