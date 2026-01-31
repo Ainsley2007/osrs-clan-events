@@ -53,5 +53,7 @@ type LeaderboardStore interface {
 	GetActiveEvent(ctx context.Context, guildID string, eventType string) (*database.Event, error)
 	GetSnapshotsWithAccounts(ctx context.Context, eventID int64) ([]*database.SnapshotWithAccount, error)
 	GetAccountsByGuild(ctx context.Context, guildID string) ([]*database.Account, error)
+	CountActiveAccountsByDiscordID(ctx context.Context, discordUserID string) (int, error)
 	GetParticipant(ctx context.Context, discordUserID, guildID string) (*database.Participant, error)
+	GetParticipantsByGuild(ctx context.Context, guildID string) ([]*database.Participant, error)
 }

@@ -27,3 +27,21 @@ func respondSuccess(s *discordgo.Session, i *discordgo.Interaction, message stri
 		},
 	})
 }
+
+// respondDeferred sends a deferred response (use within 3s) so the work can continue async.
+// Call editDeferredContent afterwards to update with the final result.
+func respondDeferred(s *discordgo.Session, i *discordgo.Interaction, loadingMessage string) error {
+	return s.InteractionRespond(i, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: loadingMessage,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	})
+}
+
+func editDeferredContent(s *discordgo.Session, i *discordgo.Interaction, content string) {
+	if _, err := s.InteractionResponseEdit(i, &discordgo.WebhookEdit{Content: &content}); err != nil {
+		log.Printf("Failed to edit deferred response: %v", err)
+	}
+}

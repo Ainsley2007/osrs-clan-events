@@ -87,6 +87,8 @@ func (b *Bot) Stop() error {
 
 func (b *Bot) ready(s *discordgo.Session, event *discordgo.Ready) {
 	log.Printf("Logged in as: %v#%v", s.State.User.Username, s.State.User.Discriminator)
+	// Initialize all guilds on connect (handles restart, reconnect); guildCreate handles new guilds
+	go b.InitializeAllGuilds()
 }
 
 func (b *Bot) interactionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {

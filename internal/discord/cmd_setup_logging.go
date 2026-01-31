@@ -23,6 +23,15 @@ func (b *Bot) setupLoggingChannelCommand() Command {
 			},
 		},
 		Handler: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			if i.GuildID == "" {
+				respondError(s, i.Interaction, fmt.Errorf("this command can only be used in a server"))
+				return
+			}
+			if !hasAdminPermission(s, i.GuildID, i.Member.User.ID) {
+				respondError(s, i.Interaction, fmt.Errorf("you must be an administrator to use this command"))
+				return
+			}
+
 			ctx := context.Background()
 			data := i.ApplicationCommandData()
 
@@ -40,10 +49,6 @@ func (b *Bot) setupLoggingChannelCommand() Command {
 			}
 
 			guildID := i.GuildID
-			if guildID == "" {
-				respondError(s, i.Interaction, fmt.Errorf("this command can only be used in a server"))
-				return
-			}
 
 			if err := b.GuildService.UpdateLogChannel(ctx, guildID, channelID); err != nil {
 				respondError(s, i.Interaction, err)

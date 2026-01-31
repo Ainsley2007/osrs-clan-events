@@ -44,12 +44,13 @@ func formatNumber(n int64) string {
 }
 
 type LeaderboardEntry struct {
-	DiscordID   string
-	DiscordName string
-	Accounts    []AccountContribution
-	TotalGain   int64
-	TotalPoints int
-	CurrentRank int
+	DiscordID    string
+	DiscordName  string
+	Accounts     []AccountContribution
+	AccountCount int // used by overall leaderboard (lightweight, no account data)
+	TotalGain    int64
+	TotalPoints  int
+	CurrentRank  int
 }
 
 type AccountContribution struct {
@@ -335,60 +336,38 @@ func assignRanks(entries []LeaderboardEntry) {
 }
 
 func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, guildID string, eventType string) (*discordgo.MessageEmbed, error) {
-	accounts, err := s.store.GetAccountsByGuild(ctx, guildID)
+	participants, err := s.store.GetParticipantsByGuild(ctx, guildID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get accounts: %w", err)
+		return nil, fmt.Errorf("failed to get participants: %w", err)
 	}
 
-	// Group by Discord user ID
-	userMap := make(map[string]*LeaderboardEntry)
-	for _, account := range accounts {
-		participant, err := s.store.GetParticipant(ctx, account.DiscordUserID, guildID)
-		if err != nil || participant == nil {
-			continue
-		}
-
+	var entries []LeaderboardEntry
+	for _, p := range participants {
 		var totalPoints int
 		if eventType == "botw" {
-			totalPoints = participant.TotalPointsBotw
+			totalPoints = p.TotalPointsBotw
 		} else {
-			totalPoints = participant.TotalPointsSotw
+			totalPoints = p.TotalPointsSotw
 		}
-
 		if totalPoints == 0 {
 			continue
 		}
 
-		discordID := account.DiscordUserID
-		if _, exists := userMap[discordID]; !exists {
-			userMap[discordID] = &LeaderboardEntry{
-				DiscordID:   discordID,
-				TotalPoints: totalPoints,
-				Accounts:    []AccountContribution{},
-			}
+		accountCount, _ := s.store.CountActiveAccountsByDiscordID(ctx, p.DiscordUserID)
+
+		user, err := s.session.User(p.DiscordUserID)
+		discordName := "Unknown User"
+		if err == nil {
+			discordName = user.Username
 		}
 
-		entry := userMap[discordID]
-		entry.Accounts = append(entry.Accounts, AccountContribution{
-			RSN: account.RSN,
+		entries = append(entries, LeaderboardEntry{
+			DiscordID:     p.DiscordUserID,
+			DiscordName:   discordName,
+			TotalPoints:   totalPoints,
+			AccountCount:  accountCount,
+			Accounts:      nil, // not used for overall leaderboard
 		})
-		// Use the highest total points (they should all be the same for the same user)
-		if totalPoints > entry.TotalPoints {
-			entry.TotalPoints = totalPoints
-		}
-	}
-
-	var entries []LeaderboardEntry
-	for _, entry := range userMap {
-		// Fetch Discord username
-		user, err := s.session.User(entry.DiscordID)
-		if err != nil {
-			entry.DiscordName = "Unknown User"
-		} else {
-			entry.DiscordName = user.Username
-		}
-
-		entries = append(entries, *entry)
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -434,8 +413,16 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 				rankPrefix = fmt.Sprintf("**%d.**", entry.CurrentRank)
 			}
 
-			// Main entry: icon/rank - name - points
-			description.WriteString(fmt.Sprintf("%s <@%s> - points: `%s`\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints))))
+			// Main entry: icon/rank - name - points (optional account count)
+			pointsLine := fmt.Sprintf("%s <@%s> - points: `%s`", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)))
+			if entry.AccountCount > 0 {
+				accLabel := "account"
+				if entry.AccountCount != 1 {
+					accLabel = "accounts"
+				}
+				pointsLine += fmt.Sprintf(" (%d %s)", entry.AccountCount, accLabel)
+			}
+			description.WriteString(pointsLine + "\n")
 
 			// Add spacing between entries (except after the last one)
 			if i < len(entries)-1 && i < 19 {

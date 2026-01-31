@@ -58,6 +58,12 @@ func (s *SQLiteStore) GetAccountsByDiscordID(ctx context.Context, discordUserID 
 	return accounts, rows.Err()
 }
 
+func (s *SQLiteStore) CountActiveAccountsByDiscordID(ctx context.Context, discordUserID string) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM accounts WHERE discord_user_id = ? AND is_active = 1`, discordUserID).Scan(&count)
+	return count, err
+}
+
 func (s *SQLiteStore) GetActiveAccounts(ctx context.Context) ([]*Account, error) {
 	query := `SELECT id, rsn, discord_user_id, error_count, is_active FROM accounts WHERE is_active = 1`
 	rows, err := s.db.QueryContext(ctx, query)

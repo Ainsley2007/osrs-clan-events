@@ -34,29 +34,25 @@ func (b *Bot) exitCommand() Command {
 				return
 			}
 
-			// Respond immediately to avoid timeout
-			var message string
-			if isOtherUser {
-				user, _ := s.User(targetUser)
-				message = fmt.Sprintf("✅ Removing <@%s> from all competitions...", user.ID)
-			} else {
-				message = "✅ Leaving all competitions..."
+			if err := respondDeferred(s, i.Interaction, "⏳ Leaving competitions..."); err != nil {
+				log.Printf("Failed to defer exit interaction: %v", err)
+				return
 			}
-			respondSuccess(s, i.Interaction, message)
 
-			// Do heavy work asynchronously (leaderboard updates, logging)
 			go func() {
 				ctx := context.Background()
 				if err := b.AccountService.ExitCompetition(ctx, targetUser, i.GuildID); err != nil {
-					log.Printf("Failed to exit competition for user %s: %v", targetUser, err)
+					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to leave competitions: %v", err))
 					return
 				}
 
 				if isOtherUser {
 					user, _ := s.User(targetUser)
 					b.logAction(ctx, i.GuildID, fmt.Sprintf("🚪 <@%s> removed <@%s> from competitions", i.Member.User.ID, user.ID))
+					editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Removed <@%s> from all competitions.", targetUser))
 				} else {
 					b.logAction(ctx, i.GuildID, fmt.Sprintf("🚪 <@%s> left all competitions", targetUser))
+					editDeferredContent(s, i.Interaction, "✅ Left all competitions.")
 				}
 			}()
 		},

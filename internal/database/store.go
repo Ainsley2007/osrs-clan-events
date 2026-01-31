@@ -81,12 +81,14 @@ type Store interface {
 	// Participants
 	SaveParticipant(ctx context.Context, p *Participant) error
 	GetParticipant(ctx context.Context, discordUserID, guildID string) (*Participant, error)
+	GetParticipantsByGuild(ctx context.Context, guildID string) ([]*Participant, error)
 	DeleteParticipant(ctx context.Context, discordUserID, guildID string) error
 
 	// Accounts
 	SaveAccount(ctx context.Context, acc *Account) error
 	GetAccount(ctx context.Context, id int64) (*Account, error)
 	GetAccountsByDiscordID(ctx context.Context, discordUserID string) ([]*Account, error)
+	CountActiveAccountsByDiscordID(ctx context.Context, discordUserID string) (int, error)
 	GetAccountsByGuild(ctx context.Context, guildID string) ([]*Account, error)
 	GetAccountByRSN(ctx context.Context, rsn, discordUserID string) (*Account, error)
 	GetActiveAccounts(ctx context.Context) ([]*Account, error)

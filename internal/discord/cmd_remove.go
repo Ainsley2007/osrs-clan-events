@@ -51,29 +51,25 @@ func (b *Bot) removeCommand() Command {
 				return
 			}
 
-			// Respond immediately to avoid timeout
-			var message string
-			if isOtherUser {
-				user, _ := s.User(targetUser)
-				message = fmt.Sprintf("✅ Removing RSN `%s` from <@%s>...", rsn, user.ID)
-			} else {
-				message = fmt.Sprintf("✅ Removing RSN: `%s`...", rsn)
+			if err := respondDeferred(s, i.Interaction, "⏳ Removing account..."); err != nil {
+				log.Printf("Failed to defer remove interaction: %v", err)
+				return
 			}
-			respondSuccess(s, i.Interaction, message)
 
-			// Do heavy work asynchronously (leaderboard updates, logging)
 			go func() {
 				ctx := context.Background()
 				if err := b.AccountService.RemoveAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
-					log.Printf("Failed to remove account %s: %v", rsn, err)
+					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to remove account: %v", err))
 					return
 				}
 
 				if isOtherUser {
 					user, _ := s.User(targetUser)
 					b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s` from <@%s>", i.Member.User.ID, rsn, user.ID))
+					editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Removed RSN `%s` from <@%s>.", rsn, targetUser))
 				} else {
 					b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s`", targetUser, rsn))
+					editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Removed RSN `%s`.", rsn))
 				}
 			}()
 		},
