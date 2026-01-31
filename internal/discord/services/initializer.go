@@ -63,15 +63,34 @@ func (s *InitializerService) InitializeGuild(ctx context.Context, guildID string
 	return nil
 }
 
+// categoryDisplayName returns the display name for a BOTW/SOTW category.
+// When metricName is empty, returns base name (e.g. "╔═══BOTW═══╗").
+// When metricName is set, returns event-specific name (e.g. "╔═══BOTW - Vorkath═══╗").
+func categoryDisplayName(eventType, metricName string) string {
+	upper := strings.ToUpper(eventType)
+	if metricName == "" {
+		return fmt.Sprintf("╔═══%s═══╗", upper)
+	}
+	return fmt.Sprintf("╔═══%s - %s═══╗", upper, metricName)
+}
+
 func (s *InitializerService) ensureCategories(ctx context.Context, guild *database.Guild) error {
-	if err := s.ensureCategory(ctx, guild.GuildID, "╔═══BOTW═══╗", &guild.BotwCategoryID); err != nil {
+	botwMetric := ""
+	if e, err := s.store.GetActiveEvent(ctx, guild.GuildID, "botw"); err == nil && e != nil {
+		botwMetric = e.MetricJsonID
+	}
+	if err := s.ensureCategory(ctx, guild.GuildID, "botw", botwMetric, &guild.BotwCategoryID); err != nil {
 		return err
 	}
 	if err := s.store.SaveGuild(ctx, guild); err != nil {
 		return fmt.Errorf("failed to save guild after BOTW category: %w", err)
 	}
 
-	if err := s.ensureCategory(ctx, guild.GuildID, "╔═══SOTW═══╗", &guild.SotwCategoryID); err != nil {
+	sotwMetric := ""
+	if e, err := s.store.GetActiveEvent(ctx, guild.GuildID, "sotw"); err == nil && e != nil {
+		sotwMetric = e.MetricJsonID
+	}
+	if err := s.ensureCategory(ctx, guild.GuildID, "sotw", sotwMetric, &guild.SotwCategoryID); err != nil {
 		return err
 	}
 	if err := s.store.SaveGuild(ctx, guild); err != nil {
@@ -81,7 +100,8 @@ func (s *InitializerService) ensureCategories(ctx context.Context, guild *databa
 	return nil
 }
 
-func (s *InitializerService) ensureCategory(_ context.Context, guildID, name string, categoryID *string) error {
+func (s *InitializerService) ensureCategory(_ context.Context, guildID, eventType, metricName string, categoryID *string) error {
+	name := categoryDisplayName(eventType, metricName)
 	if *categoryID != "" {
 		channel, err := s.session.Channel(*categoryID)
 		if err == nil && channel != nil {
@@ -124,23 +144,16 @@ func (s *InitializerService) RenameCategory(ctx context.Context, guildID, catego
 // RenameCategoryForEvent renames the category based on the event type and metric name
 func (s *InitializerService) RenameCategoryForEvent(ctx context.Context, guild *database.Guild, eventType string, event *database.Event) error {
 	var categoryID string
-	var displayName string
-
 	if eventType == "botw" {
 		categoryID = guild.BotwCategoryID
-		// Use the boss name (MetricJsonID), not the tracked bosses
-		displayName = event.MetricJsonID
 	} else {
 		categoryID = guild.SotwCategoryID
-		displayName = event.MetricJsonID
 	}
-
 	if categoryID == "" {
-		return nil // No category to rename
+		return nil
 	}
-
-	// Format: ╔═══BOTW - Vorkath═══╗ or ╔═══SOTW - Mining═══╗
-	newName := fmt.Sprintf("╔═══%s - %s═══╗", strings.ToUpper(eventType), displayName)
+	// Use MetricJsonID (boss/skill name), not tracked bosses
+	newName := categoryDisplayName(eventType, event.MetricJsonID)
 	return s.RenameCategory(ctx, guild.GuildID, categoryID, newName)
 }
 
