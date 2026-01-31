@@ -7,6 +7,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+func ptr[T any](v T) *T { return &v }
+
 func parseUserMention(mention string) (string, error) {
 	mention = strings.TrimSpace(mention)
 

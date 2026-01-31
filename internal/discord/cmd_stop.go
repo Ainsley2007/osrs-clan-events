@@ -13,8 +13,9 @@ import (
 func (b *Bot) stopCommand() Command {
 	return Command{
 		Definition: &discordgo.ApplicationCommand{
-			Name:        "stop",
-			Description: "Stop all active competitions and award points",
+			Name:                    "stop",
+			Description:             "Stop all active competitions and award points",
+			DefaultMemberPermissions: ptr(int64(discordgo.PermissionAdministrator)),
 		},
 		Handler: b.handleStop,
 	}

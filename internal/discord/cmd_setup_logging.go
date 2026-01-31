@@ -10,8 +10,9 @@ import (
 func (b *Bot) setupLoggingChannelCommand() Command {
 	return Command{
 		Definition: &discordgo.ApplicationCommand{
-			Name:        "setup-logging-channel",
-			Description: "Set the channel where important logging messages will be sent",
+			Name:                    "setup-logging-channel",
+			Description:             "Set the channel where important logging messages will be sent",
+			DefaultMemberPermissions: ptr(int64(discordgo.PermissionAdministrator)),
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionChannel,

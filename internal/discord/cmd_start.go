@@ -13,8 +13,9 @@ import (
 func (b *Bot) startCommand() Command {
 	return Command{
 		Definition: &discordgo.ApplicationCommand{
-			Name:        "start",
-			Description: "Start weekly BOTW and SOTW competitions",
+			Name:                    "start",
+			Description:             "Start weekly BOTW and SOTW competitions",
+			DefaultMemberPermissions: ptr(int64(discordgo.PermissionAdministrator)),
 		},
 		Handler: b.handleStart,
 	}

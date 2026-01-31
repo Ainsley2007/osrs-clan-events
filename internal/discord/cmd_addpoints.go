@@ -14,8 +14,9 @@ import (
 func (b *Bot) addPointsCommand() Command {
 	return Command{
 		Definition: &discordgo.ApplicationCommand{
-			Name:        "addpoints",
-			Description: "Add BOTW or SOTW total points to a participant (admin only)",
+			Name:                    "addpoints",
+			Description:             "Add BOTW or SOTW total points to a participant (admin only)",
+			DefaultMemberPermissions: ptr(int64(discordgo.PermissionAdministrator)),
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionUser,
