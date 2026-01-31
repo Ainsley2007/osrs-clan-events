@@ -50,21 +50,16 @@ func (b *Bot) addAccountCommand() Command {
 				return
 			}
 
-			// Respond immediately to avoid timeout
-			var message string
-			if isOtherUser {
-				user, _ := s.User(targetUser)
-				message = fmt.Sprintf("✅ Adding RSN `%s` for <@%s>...", rsn, user.ID)
-			} else {
-				message = fmt.Sprintf("✅ Adding RSN: `%s`...", rsn)
+			if err := respondDeferred(s, i.Interaction, "⏳ Adding account..."); err != nil {
+				log.Printf("Failed to defer add interaction: %v", err)
+				return
 			}
-			respondSuccess(s, i.Interaction, message)
 
-			// Do heavy work asynchronously (snapshots, leaderboard updates, logging)
 			go func() {
 				ctx := context.Background()
-				if err := b.AccountService.AddAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
-					log.Printf("Failed to add account %s: %v", rsn, err)
+				result, err := b.AccountService.AddAccount(ctx, targetUser, i.GuildID, rsn)
+				if err != nil {
+					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to add account: %v", err))
 					return
 				}
 
@@ -73,6 +68,20 @@ func (b *Bot) addAccountCommand() Command {
 					b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s` for <@%s>", i.Member.User.ID, rsn, user.ID))
 				} else {
 					b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s`", targetUser, rsn))
+				}
+
+				if result.JoinedGuild {
+					if isOtherUser {
+						editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Account `%s` was already linked to <@%s>. They're now participating in this server's competitions.", rsn, targetUser))
+					} else {
+						editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Account `%s` was already linked to you. You're now participating in this server's competitions.", rsn))
+					}
+				} else {
+					if isOtherUser {
+						editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Added RSN `%s` for <@%s>.", rsn, targetUser))
+					} else {
+						editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Added RSN `%s`.", rsn))
+					}
 				}
 			}()
 		},

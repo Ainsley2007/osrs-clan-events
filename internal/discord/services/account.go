@@ -25,15 +25,36 @@ func NewAccountService(store AccountStore, snapshotService *SnapshotService, lea
 	}
 }
 
-func (s *AccountService) AddAccount(ctx context.Context, discordUserID, guildID, rsn string) error {
+// AddAccountResult indicates whether the account was new or the user joined this guild with an existing account.
+type AddAccountResult struct {
+	JoinedGuild bool // true if account already existed and user was added as participant to this guild
+}
+
+func (s *AccountService) AddAccount(ctx context.Context, discordUserID, guildID, rsn string) (*AddAccountResult, error) {
 	rsn = strings.TrimSpace(rsn)
 	if rsn == "" {
-		return fmt.Errorf("RSN cannot be empty")
+		return nil, fmt.Errorf("RSN cannot be empty")
 	}
 
 	existing, err := s.store.GetAccountByRSN(ctx, rsn, discordUserID)
 	if err == nil && existing != nil {
-		return fmt.Errorf("you already have an account with RSN: %s", rsn)
+		// Account already exists; ensure participant in this guild and create snapshots for this guild's events
+		_, err := s.store.GetParticipant(ctx, discordUserID, guildID)
+		if err != nil {
+			participant := &database.Participant{
+				DiscordUserID:   discordUserID,
+				GuildID:         guildID,
+				TotalPointsBotw: 0,
+				TotalPointsSotw: 0,
+			}
+			if err := s.store.SaveParticipant(ctx, participant); err != nil {
+				return nil, fmt.Errorf("failed to create participant for this guild: %w", err)
+			}
+		}
+		if err := s.createSnapshotsForActiveEvents(ctx, existing, guildID); err != nil {
+			s.logger.Printf("Warning: failed to create snapshots for existing account %s in guild: %v", rsn, err)
+		}
+		return &AddAccountResult{JoinedGuild: true}, nil
 	}
 
 	participant, err := s.store.GetParticipant(ctx, discordUserID, guildID)
@@ -45,7 +66,7 @@ func (s *AccountService) AddAccount(ctx context.Context, discordUserID, guildID,
 			TotalPointsSotw: 0,
 		}
 		if err := s.store.SaveParticipant(ctx, participant); err != nil {
-			return fmt.Errorf("failed to create participant: %w", err)
+			return nil, fmt.Errorf("failed to create participant: %w", err)
 		}
 	}
 
@@ -57,16 +78,14 @@ func (s *AccountService) AddAccount(ctx context.Context, discordUserID, guildID,
 	}
 
 	if err := s.store.SaveAccount(ctx, account); err != nil {
-		return fmt.Errorf("failed to add account: %w", err)
+		return nil, fmt.Errorf("failed to add account: %w", err)
 	}
 
-	// Create snapshots for this new account for all active events in the guild
 	if err := s.createSnapshotsForActiveEvents(ctx, account, guildID); err != nil {
-		// Log error but don't fail account creation - snapshots can be created later
 		s.logger.Printf("Warning: failed to create snapshots for new account %s: %v", rsn, err)
 	}
 
-	return nil
+	return &AddAccountResult{JoinedGuild: false}, nil
 }
 
 func (s *AccountService) createSnapshotsForActiveEvents(ctx context.Context, account *database.Account, guildID string) error {
