@@ -177,6 +177,7 @@ func (s *AccountService) RenameAccount(ctx context.Context, discordUserID, guild
 		s.logger.Printf("Warning: failed to create snapshots after rename: %v", err)
 	}
 
+	s.leaderboardService.RefreshLeaderboards(ctx, guildID)
 	return nil
 }
 

@@ -90,6 +90,9 @@ func (b *Bot) handleAddPoints(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Added %s %s points to <@%s>.", formatPoints(int64(amount)), label, targetUserID))
 
+	// Refresh overall leaderboards so the new points are reflected
+	b.LeaderboardService.RefreshLeaderboards(ctx, i.GuildID)
+
 	logMsg := fmt.Sprintf("➕ <@%s> added %s %s points to <@%s>.", i.Member.User.ID, formatPoints(int64(amount)), label, targetUserID)
 	b.logAction(ctx, i.GuildID, logMsg)
 }
