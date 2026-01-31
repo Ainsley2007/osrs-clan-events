@@ -41,6 +41,12 @@ type EventStore interface {
 	DeactivateEvent(ctx context.Context, eventID int64) error
 }
 
+// ParticipantStore is the minimal persistence interface for participant points workflows.
+type ParticipantStore interface {
+	GetParticipant(ctx context.Context, discordUserID, guildID string) (*database.Participant, error)
+	UpdateParticipantPoints(ctx context.Context, updates []*database.ParticipantPointUpdate) error
+}
+
 // LeaderboardStore is the minimal persistence interface for leaderboard workflows.
 type LeaderboardStore interface {
 	GetGuild(ctx context.Context, guildID string) (*database.Guild, error)

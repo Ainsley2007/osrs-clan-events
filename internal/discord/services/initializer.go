@@ -186,10 +186,38 @@ func (s *InitializerService) ensureChannel(_ context.Context, guildID, name, par
 		log.Printf("[Guild %s] Channel %s (ID: %s) not found in Discord, recreating", guildID, name, *channelID)
 	}
 
+	// Read-only: @everyone can view but not send; bot, server owner, and admin role can send
+	allowSend := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages)
+	overwrites := []*discordgo.PermissionOverwrite{
+		{ID: guildID, Type: discordgo.PermissionOverwriteTypeRole, Allow: discordgo.PermissionViewChannel, Deny: discordgo.PermissionSendMessages},
+	}
+	if s.session.State != nil && s.session.State.User != nil {
+		overwrites = append(overwrites, &discordgo.PermissionOverwrite{
+			ID: s.session.State.User.ID, Type: discordgo.PermissionOverwriteTypeMember, Allow: allowSend,
+		})
+	}
+	guild, err := s.session.Guild(guildID)
+	if err == nil {
+		if guild.OwnerID != "" {
+			overwrites = append(overwrites, &discordgo.PermissionOverwrite{
+				ID: guild.OwnerID, Type: discordgo.PermissionOverwriteTypeMember, Allow: allowSend,
+			})
+		}
+		for _, r := range guild.Roles {
+			if strings.EqualFold(r.Name, "admin") {
+				overwrites = append(overwrites, &discordgo.PermissionOverwrite{
+					ID: r.ID, Type: discordgo.PermissionOverwriteTypeRole, Allow: allowSend,
+				})
+				break
+			}
+		}
+	}
+
 	channel, err := s.session.GuildChannelCreateComplex(guildID, discordgo.GuildChannelCreateData{
-		Name:     name,
-		Type:     discordgo.ChannelTypeGuildText,
-		ParentID: parentID,
+		Name:                name,
+		Type:                discordgo.ChannelTypeGuildText,
+		ParentID:            parentID,
+		PermissionOverwrites: overwrites,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create channel %s: %w", name, err)

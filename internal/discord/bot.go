@@ -22,6 +22,7 @@ type Bot struct {
 	EventService       *services.EventService
 	SnapshotService    *services.SnapshotService
 	LeaderboardService *services.LeaderboardService
+	ParticipantService *services.ParticipantService
 	Handlers           map[string]Command
 
 	mu             sync.Mutex
@@ -39,18 +40,23 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 	eventService := services.NewEventService(store, snapshotService, firebaseClient)
 	leaderboardService := services.NewLeaderboardService(store, dg, logger)
 
+	guildService := services.NewGuildService(store)
+	accountService := services.NewAccountService(store, snapshotService, leaderboardService, logger)
+	participantService := services.NewParticipantService(store)
+	initializerService := services.NewInitializerService(dg, store, leaderboardService)
+
 	bot := &Bot{
 		Session:            dg,
 		Store:              store,
-		GuildService:       services.NewGuildService(store),
-		AccountService:     services.NewAccountService(store, snapshotService, leaderboardService, logger),
+		GuildService:       guildService,
+		AccountService:     accountService,
+		InitializerService: initializerService,
 		EventService:       eventService,
 		SnapshotService:    snapshotService,
 		LeaderboardService: leaderboardService,
+		ParticipantService: participantService,
 		initInProgress:     make(map[string]bool),
 	}
-
-	bot.InitializerService = services.NewInitializerService(dg, store, leaderboardService)
 
 	bot.setupCommands()
 

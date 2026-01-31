@@ -18,6 +18,7 @@ func (b *Bot) setupCommands() {
 	b.registerCommand(b.renameCommand())
 	b.registerCommand(b.startCommand())
 	b.registerCommand(b.stopCommand())
+	b.registerCommand(b.addPointsCommand())
 }
 
 func (b *Bot) registerCommand(cmd Command) {
