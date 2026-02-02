@@ -56,14 +56,29 @@ func (s *Scheduler) updateActiveSnapshots() {
 	}
 
 	// Update all snapshots efficiently (fetch stats once per account, update all events)
-	failedUpdates, err := s.snapshotService.UpdateSnapshotsForEvents(ctx, events)
+	result, err := s.snapshotService.UpdateSnapshotsForEventsWithResult(ctx, events)
 	if err != nil {
 		log.Printf("Failed to update snapshots: %v", err)
 		return
 	}
 
+	// Log snapshot update summary to each guild's logging channel
+	for guildID, guild := range guildsMap {
+		if guild.LogChannelID == "" {
+			continue
+		}
+		// Collect failed RSNs for this guild
+		var failedRSNs []string
+		for _, failed := range result.FailedUpdates {
+			if failed.GuildID == guildID {
+				failedRSNs = append(failedRSNs, failed.RSN)
+			}
+		}
+		discord.SendSnapshotUpdateLog(s.session, guild.LogChannelID, "Hourly Update", result.TotalAccounts, failedRSNs, result.Duration)
+	}
+
 	// Log 404 errors to the log channel of the guild the account belongs to only
-	for _, failed := range failedUpdates {
+	for _, failed := range result.FailedUpdates {
 		var notFoundErr *osrs.PlayerNotFoundError
 		if !errors.As(failed.Error, &notFoundErr) {
 			continue
@@ -85,6 +100,5 @@ func (s *Scheduler) updateActiveSnapshots() {
 		}
 	}
 
-	log.Printf("Updated snapshots for %d events across %d guilds", len(events), len(guildsMap))
-	log.Println("Hourly snapshot update completed")
+	log.Printf("Hourly snapshot update completed: %d events across %d guilds, %d accounts processed in %s", len(events), len(guildsMap), result.TotalAccounts, result.Duration.Round(time.Millisecond))
 }

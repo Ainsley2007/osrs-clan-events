@@ -277,26 +277,17 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 			// Main entry: icon/rank - name - points (gain label)
 			description.WriteString(fmt.Sprintf("%s <@%s> - `points: %s` (*%s %s*)\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)), formatNumber(int64(entry.TotalGain)), gainLabel))
 
-			// Show account breakdown if there are multiple accounts with gains
-			accountsWithGain := 0
+			// Show account breakdown for accounts with gain > 0
 			for _, acc := range entry.Accounts {
 				if acc.Gain > 0 {
-					accountsWithGain++
-				}
-			}
-
-			if accountsWithGain > 1 {
-				for _, acc := range entry.Accounts {
-					if acc.Gain > 0 {
-						var accGainDisplay string
-						if event.Type == "botw" {
-							accGainDisplay = fmt.Sprintf("%s KC", formatNumber(int64(acc.Gain)))
-						} else {
-							accGainDisplay = fmt.Sprintf("%s XP", formatNumber(int64(acc.Gain)))
-						}
-						// Use Unicode em spaces for indentation (Discord preserves these)
-						description.WriteString(fmt.Sprintf("\u2003• *%s*: %s\n", acc.RSN, accGainDisplay))
+					var accGainDisplay string
+					if event.Type == "botw" {
+						accGainDisplay = fmt.Sprintf("%s KC", formatNumber(int64(acc.Gain)))
+					} else {
+						accGainDisplay = fmt.Sprintf("%s XP", formatNumber(int64(acc.Gain)))
 					}
+					// Use Unicode em spaces for indentation (Discord preserves these)
+					description.WriteString(fmt.Sprintf("\u2003• *%s*: %s\n", acc.RSN, accGainDisplay))
 				}
 			}
 
@@ -362,11 +353,11 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 		}
 
 		entries = append(entries, LeaderboardEntry{
-			DiscordID:     p.DiscordUserID,
-			DiscordName:   discordName,
-			TotalPoints:   totalPoints,
-			AccountCount:  accountCount,
-			Accounts:      nil, // not used for overall leaderboard
+			DiscordID:    p.DiscordUserID,
+			DiscordName:  discordName,
+			TotalPoints:  totalPoints,
+			AccountCount: accountCount,
+			Accounts:     nil, // not used for overall leaderboard
 		})
 	}
 

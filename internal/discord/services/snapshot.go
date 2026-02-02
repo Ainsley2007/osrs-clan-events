@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"osrs-events/internal/database"
 	"osrs-events/internal/osrs"
@@ -23,33 +24,55 @@ func NewSnapshotService(store SnapshotStore, osrsClient *osrs.Client) *SnapshotS
 	}
 }
 
+type InitialSnapshotResult struct {
+	SuccessCount int
+	FailedRSNs   []string
+	Duration     time.Duration
+}
+
 func (s *SnapshotService) CreateInitialSnapshots(ctx context.Context, eventID int64, guildID, metricName, metricType string) (int, error) {
+	result, err := s.CreateInitialSnapshotsWithResult(ctx, eventID, guildID, metricName, metricType)
+	if err != nil {
+		return 0, err
+	}
+	return result.SuccessCount, nil
+}
+
+func (s *SnapshotService) CreateInitialSnapshotsWithResult(ctx context.Context, eventID int64, guildID, metricName, metricType string) (*InitialSnapshotResult, error) {
+	startTime := time.Now()
 	accounts, err := s.store.GetAccountsByGuild(ctx, guildID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get accounts: %w", err)
+		return nil, fmt.Errorf("failed to get accounts: %w", err)
 	}
 
 	if len(accounts) == 0 {
-		return 0, fmt.Errorf("no participants found")
+		return nil, fmt.Errorf("no participants found")
 	}
 
 	event, err := s.store.GetEvent(ctx, eventID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get event: %w", err)
+		return nil, fmt.Errorf("failed to get event: %w", err)
 	}
+
+	var failedRSNs []string
+	successCount := 0
 
 	// Fetch stats once per account and create snapshot
 	for _, account := range accounts {
 		// Fetch player stats once for this account
 		stats, err := s.osrsClient.GetPlayerStats(ctx, account.RSN)
 		if err != nil {
-			return 0, fmt.Errorf("failed to fetch stats for %s: %w", account.RSN, err)
+			failedRSNs = append(failedRSNs, account.RSN)
+			log.Printf("Failed to fetch stats for %s during initial snapshot: %v", account.RSN, err)
+			continue
 		}
 
 		// Extract metric value from cached stats
 		value, err := s.extractMetricValueFromStats(stats, event)
 		if err != nil {
-			return 0, fmt.Errorf("failed to extract metric for %s: %w", account.RSN, err)
+			failedRSNs = append(failedRSNs, account.RSN)
+			log.Printf("Failed to extract metric for %s during initial snapshot: %v", account.RSN, err)
+			continue
 		}
 
 		snapshot := &database.Snapshot{
@@ -60,11 +83,19 @@ func (s *SnapshotService) CreateInitialSnapshots(ctx context.Context, eventID in
 		}
 
 		if err := s.store.CreateSnapshot(ctx, snapshot); err != nil {
-			return 0, fmt.Errorf("failed to create snapshot for %s: %w", account.RSN, err)
+			failedRSNs = append(failedRSNs, account.RSN)
+			log.Printf("Failed to create snapshot for %s: %v", account.RSN, err)
+			continue
 		}
+
+		successCount++
 	}
 
-	return len(accounts), nil
+	return &InitialSnapshotResult{
+		SuccessCount: successCount,
+		FailedRSNs:   failedRSNs,
+		Duration:     time.Since(startTime),
+	}, nil
 }
 
 func (s *SnapshotService) CreateSnapshotForAccount(ctx context.Context, event *database.Event, account *database.Account) error {
@@ -293,12 +324,32 @@ type snapData struct {
 	event    *database.Event
 }
 
+// UpdateSnapshotsForEventsResult contains the result of updating snapshots with timing information.
+type UpdateSnapshotsForEventsResult struct {
+	FailedUpdates []FailedAccountUpdate
+	TotalAccounts int
+	Duration      time.Duration
+}
+
 // UpdateSnapshotsForEvents updates snapshots for multiple events efficiently by fetching player stats once per account.
 // For accounts that have no snapshot for an active event yet (e.g. added after event start or after startup),
 // a new snapshot entry is created with current value as both start and current.
 func (s *SnapshotService) UpdateSnapshotsForEvents(ctx context.Context, events []*database.Event) ([]FailedAccountUpdate, error) {
+	result, err := s.UpdateSnapshotsForEventsWithResult(ctx, events)
+	if err != nil {
+		return nil, err
+	}
+	return result.FailedUpdates, nil
+}
+
+func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context, events []*database.Event) (*UpdateSnapshotsForEventsResult, error) {
+	startTime := time.Now()
 	if len(events) == 0 {
-		return nil, nil
+		return &UpdateSnapshotsForEventsResult{
+			FailedUpdates: nil,
+			TotalAccounts: 0,
+			Duration:      time.Since(startTime),
+		}, nil
 	}
 
 	type accountSnapshot struct {
@@ -393,7 +444,11 @@ func (s *SnapshotService) UpdateSnapshotsForEvents(ctx context.Context, events [
 
 			if sd.snapshot != nil {
 				if err := s.store.UpdateSnapshotCurrentValue(ctx, sd.snapshot.ID, value); err != nil {
-					return failedUpdates, fmt.Errorf("failed to update snapshot for account %d: %w", accountID, err)
+					return &UpdateSnapshotsForEventsResult{
+						FailedUpdates: failedUpdates,
+						TotalAccounts: len(accountSnapshotsMap),
+						Duration:      time.Since(startTime),
+					}, fmt.Errorf("failed to update snapshot for account %d: %w", accountID, err)
 				}
 			} else {
 				snapshot := &database.Snapshot{
@@ -403,13 +458,21 @@ func (s *SnapshotService) UpdateSnapshotsForEvents(ctx context.Context, events [
 					CurrentValue: value,
 				}
 				if err := s.store.CreateSnapshot(ctx, snapshot); err != nil {
-					return failedUpdates, fmt.Errorf("failed to create snapshot for account %d, event %d: %w", accountID, sd.event.ID, err)
+					return &UpdateSnapshotsForEventsResult{
+						FailedUpdates: failedUpdates,
+						TotalAccounts: len(accountSnapshotsMap),
+						Duration:      time.Since(startTime),
+					}, fmt.Errorf("failed to create snapshot for account %d, event %d: %w", accountID, sd.event.ID, err)
 				}
 			}
 		}
 	}
 
-	return failedUpdates, nil
+	return &UpdateSnapshotsForEventsResult{
+		FailedUpdates: failedUpdates,
+		TotalAccounts: len(accountSnapshotsMap),
+		Duration:      time.Since(startTime),
+	}, nil
 }
 
 // extractMetricValueFromStats extracts the metric value from already-fetched PlayerStats

@@ -25,8 +25,9 @@ func NewEventService(store EventStore, snapshotService *SnapshotService, firebas
 }
 
 type StartEventResult struct {
-	Event      *database.Event
-	MetricName string
+	Event          *database.Event
+	MetricName     string
+	SnapshotResult *InitialSnapshotResult // nil if snapshots weren't created (event starts in future)
 }
 
 func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime time.Time) (*StartEventResult, error) {
@@ -79,17 +80,21 @@ func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime 
 
 	// Create snapshots immediately if event has started (start time is now or in the past)
 	// During rollover, the new event starts at the old event's end time, so snapshots are created immediately
+	var snapshotResult *InitialSnapshotResult
 	nowUTC := time.Now().UTC()
 	startTimeUTC := startTime.UTC()
 	if !startTimeUTC.After(nowUTC) {
-		if _, err := s.snapshotService.CreateInitialSnapshots(ctx, event.ID, guildID, bossConfig.Name, "boss"); err != nil {
+		result, err := s.snapshotService.CreateInitialSnapshotsWithResult(ctx, event.ID, guildID, bossConfig.Name, "boss")
+		if err != nil {
 			return nil, fmt.Errorf("failed to create initial snapshots: %w", err)
 		}
+		snapshotResult = result
 	}
 
 	return &StartEventResult{
-		Event:      event,
-		MetricName: bossConfig.Name,
+		Event:          event,
+		MetricName:     bossConfig.Name,
+		SnapshotResult: snapshotResult,
 	}, nil
 }
 
@@ -137,17 +142,21 @@ func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime 
 
 	// Create snapshots immediately if event has started (start time is now or in the past)
 	// During rollover, the new event starts at the old event's end time, so snapshots are created immediately
+	var snapshotResult *InitialSnapshotResult
 	nowUTC := time.Now().UTC()
 	startTimeUTC := startTime.UTC()
 	if !startTimeUTC.After(nowUTC) {
-		if _, err := s.snapshotService.CreateInitialSnapshots(ctx, event.ID, guildID, skillConfig.Name, "skill"); err != nil {
+		result, err := s.snapshotService.CreateInitialSnapshotsWithResult(ctx, event.ID, guildID, skillConfig.Name, "skill")
+		if err != nil {
 			return nil, fmt.Errorf("failed to create initial snapshots: %w", err)
 		}
+		snapshotResult = result
 	}
 
 	return &StartEventResult{
-		Event:      event,
-		MetricName: skillConfig.Name,
+		Event:          event,
+		MetricName:     skillConfig.Name,
+		SnapshotResult: snapshotResult,
 	}, nil
 }
 

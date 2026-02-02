@@ -26,6 +26,7 @@ type EventService interface {
 type SnapshotService interface {
 	UpdateSnapshotsForEvent(ctx context.Context, event *database.Event) ([]services.FailedAccountUpdate, error)
 	UpdateSnapshotsForEvents(ctx context.Context, events []*database.Event) ([]services.FailedAccountUpdate, error)
+	UpdateSnapshotsForEventsWithResult(ctx context.Context, events []*database.Event) (*services.UpdateSnapshotsForEventsResult, error)
 	CreateInitialSnapshots(ctx context.Context, eventID int64, guildID, metricName, metricType string) (int, error)
 }
 

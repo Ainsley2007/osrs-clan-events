@@ -13,8 +13,8 @@ import (
 func (b *Bot) startCommand() Command {
 	return Command{
 		Definition: &discordgo.ApplicationCommand{
-			Name:                    "start",
-			Description:             "Start weekly BOTW and SOTW competitions",
+			Name:                     "start",
+			Description:              "Start weekly BOTW and SOTW competitions",
 			DefaultMemberPermissions: ptr(int64(discordgo.PermissionAdministrator)),
 		},
 		Handler: b.handleStart,
@@ -97,6 +97,16 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 		if guild.LogChannelID != "" {
 			SendCompetitionStartedLog(s, guild.LogChannelID, botwResult.MetricName, sotwResult.MetricName,
 				botwResult.Event.WeekNumber, sotwResult.Event.WeekNumber, i.Member.User.ID)
+
+			// Log initial snapshot results
+			if botwResult.SnapshotResult != nil {
+				SendSnapshotUpdateLog(s, guild.LogChannelID, fmt.Sprintf("Initial BOTW (Week %d)", botwResult.Event.WeekNumber),
+					botwResult.SnapshotResult.SuccessCount, botwResult.SnapshotResult.FailedRSNs, botwResult.SnapshotResult.Duration)
+			}
+			if sotwResult.SnapshotResult != nil {
+				SendSnapshotUpdateLog(s, guild.LogChannelID, fmt.Sprintf("Initial SOTW (Week %d)", sotwResult.Event.WeekNumber),
+					sotwResult.SnapshotResult.SuccessCount, sotwResult.SnapshotResult.FailedRSNs, sotwResult.SnapshotResult.Duration)
+			}
 		}
 	}
 
