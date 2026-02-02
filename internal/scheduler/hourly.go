@@ -62,19 +62,19 @@ func (s *Scheduler) updateActiveSnapshots() {
 		return
 	}
 
-	// Log snapshot update summary to each guild's logging channel
-	for guildID, guild := range guildsMap {
-		if guild.LogChannelID == "" {
-			continue
-		}
-		// Collect failed RSNs for this guild
+	// Log snapshot update summary locally (grouped by guild)
+	for guildID := range guildsMap {
 		var failedRSNs []string
 		for _, failed := range result.FailedUpdates {
 			if failed.GuildID == guildID {
 				failedRSNs = append(failedRSNs, failed.RSN)
 			}
 		}
-		discord.SendSnapshotUpdateLog(s.session, guild.LogChannelID, "Hourly Update", result.TotalAccounts, failedRSNs, result.Duration)
+		if len(failedRSNs) > 0 {
+			log.Printf("[Guild %s] Hourly snapshot update: %d accounts processed in %s, %d failed: %v", guildID, result.TotalAccounts, result.Duration.Round(time.Millisecond), len(failedRSNs), failedRSNs)
+		} else {
+			log.Printf("[Guild %s] Hourly snapshot update: %d accounts processed in %s", guildID, result.TotalAccounts, result.Duration.Round(time.Millisecond))
+		}
 	}
 
 	// Log 404 errors to the log channel of the guild the account belongs to only
@@ -100,5 +100,5 @@ func (s *Scheduler) updateActiveSnapshots() {
 		}
 	}
 
-	log.Printf("Hourly snapshot update completed: %d events across %d guilds, %d accounts processed in %s", len(events), len(guildsMap), result.TotalAccounts, result.Duration.Round(time.Millisecond))
+	log.Printf("Hourly snapshot update completed: %d events across %d guilds", len(events), len(guildsMap))
 }

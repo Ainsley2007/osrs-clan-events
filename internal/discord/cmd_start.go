@@ -97,15 +97,21 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 		if guild.LogChannelID != "" {
 			SendCompetitionStartedLog(s, guild.LogChannelID, botwResult.MetricName, sotwResult.MetricName,
 				botwResult.Event.WeekNumber, sotwResult.Event.WeekNumber, i.Member.User.ID)
+		}
 
-			// Log initial snapshot results
-			if botwResult.SnapshotResult != nil {
-				SendSnapshotUpdateLog(s, guild.LogChannelID, fmt.Sprintf("Initial BOTW (Week %d)", botwResult.Event.WeekNumber),
-					botwResult.SnapshotResult.SuccessCount, botwResult.SnapshotResult.FailedRSNs, botwResult.SnapshotResult.Duration)
+		// Log initial snapshot results locally
+		if botwResult.SnapshotResult != nil {
+			if len(botwResult.SnapshotResult.FailedRSNs) > 0 {
+				log.Printf("[Guild %s] Initial BOTW snapshots (Week %d): %d accounts processed in %s, %d failed: %v", i.GuildID, botwResult.Event.WeekNumber, botwResult.SnapshotResult.SuccessCount, botwResult.SnapshotResult.Duration.Round(time.Millisecond), len(botwResult.SnapshotResult.FailedRSNs), botwResult.SnapshotResult.FailedRSNs)
+			} else {
+				log.Printf("[Guild %s] Initial BOTW snapshots (Week %d): %d accounts processed in %s", i.GuildID, botwResult.Event.WeekNumber, botwResult.SnapshotResult.SuccessCount, botwResult.SnapshotResult.Duration.Round(time.Millisecond))
 			}
-			if sotwResult.SnapshotResult != nil {
-				SendSnapshotUpdateLog(s, guild.LogChannelID, fmt.Sprintf("Initial SOTW (Week %d)", sotwResult.Event.WeekNumber),
-					sotwResult.SnapshotResult.SuccessCount, sotwResult.SnapshotResult.FailedRSNs, sotwResult.SnapshotResult.Duration)
+		}
+		if sotwResult.SnapshotResult != nil {
+			if len(sotwResult.SnapshotResult.FailedRSNs) > 0 {
+				log.Printf("[Guild %s] Initial SOTW snapshots (Week %d): %d accounts processed in %s, %d failed: %v", i.GuildID, sotwResult.Event.WeekNumber, sotwResult.SnapshotResult.SuccessCount, sotwResult.SnapshotResult.Duration.Round(time.Millisecond), len(sotwResult.SnapshotResult.FailedRSNs), sotwResult.SnapshotResult.FailedRSNs)
+			} else {
+				log.Printf("[Guild %s] Initial SOTW snapshots (Week %d): %d accounts processed in %s", i.GuildID, sotwResult.Event.WeekNumber, sotwResult.SnapshotResult.SuccessCount, sotwResult.SnapshotResult.Duration.Round(time.Millisecond))
 			}
 		}
 	}

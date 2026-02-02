@@ -161,32 +161,3 @@ func getMetricLabel(eventType string) string {
 	}
 	return "Skill"
 }
-
-func SendSnapshotUpdateLog(s *discordgo.Session, channelID string, snapshotType string, totalAccounts int, failedAccounts []string, duration time.Duration) {
-	if channelID == "" {
-		return
-	}
-
-	var description strings.Builder
-	description.WriteString(fmt.Sprintf("**Type:** %s\n", snapshotType))
-	description.WriteString(fmt.Sprintf("**Accounts Processed:** %d\n", totalAccounts))
-	description.WriteString(fmt.Sprintf("**Duration:** %s\n", duration.Round(time.Millisecond)))
-
-	if len(failedAccounts) > 0 {
-		description.WriteString(fmt.Sprintf("\n**Failed Accounts (%d):**\n", len(failedAccounts)))
-		for _, rsn := range failedAccounts {
-			description.WriteString(fmt.Sprintf("- `%s`\n", rsn))
-		}
-	} else {
-		description.WriteString("\n✅ All accounts updated successfully")
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title:       "📊 Snapshot Update",
-		Description: description.String(),
-		Color:       0x5865F2,
-		Timestamp:   time.Now().UTC().Format(time.RFC3339),
-	}
-
-	s.ChannelMessageSendEmbed(channelID, embed)
-}

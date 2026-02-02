@@ -26,8 +26,6 @@ func NewInitializerService(session *discordgo.Session, store database.Store, lea
 }
 
 func (s *InitializerService) InitializeGuild(ctx context.Context, guildID string) error {
-	log.Printf("[Guild %s] Starting initialization...", guildID)
-
 	guild, err := s.store.GetGuild(ctx, guildID)
 	if err != nil {
 		guild = &database.Guild{
@@ -59,7 +57,6 @@ func (s *InitializerService) InitializeGuild(ctx context.Context, guildID string
 		// Don't fail initialization if leaderboard refresh fails
 	}
 
-	log.Printf("[Guild %s] Initialization complete", guildID)
 	return nil
 }
 
@@ -105,7 +102,6 @@ func (s *InitializerService) ensureCategory(_ context.Context, guildID, eventTyp
 	if *categoryID != "" {
 		channel, err := s.session.Channel(*categoryID)
 		if err == nil && channel != nil {
-			log.Printf("[Guild %s] Category %s exists", guildID, name)
 			return nil
 		}
 		log.Printf("[Guild %s] Category %s (ID: %s) not found in Discord, recreating", guildID, name, *categoryID)
@@ -193,7 +189,6 @@ func (s *InitializerService) ensureChannel(_ context.Context, guildID, name, par
 	if *channelID != "" {
 		channel, err := s.session.Channel(*channelID)
 		if err == nil && channel != nil {
-			log.Printf("[Guild %s] Channel %s exists", guildID, name)
 			return nil
 		}
 		log.Printf("[Guild %s] Channel %s (ID: %s) not found in Discord, recreating", guildID, name, *channelID)
@@ -227,9 +222,9 @@ func (s *InitializerService) ensureChannel(_ context.Context, guildID, name, par
 	}
 
 	channel, err := s.session.GuildChannelCreateComplex(guildID, discordgo.GuildChannelCreateData{
-		Name:                name,
-		Type:                discordgo.ChannelTypeGuildText,
-		ParentID:            parentID,
+		Name:                 name,
+		Type:                 discordgo.ChannelTypeGuildText,
+		ParentID:             parentID,
 		PermissionOverwrites: overwrites,
 	})
 	if err != nil {
@@ -277,7 +272,6 @@ func (s *InitializerService) ensureMessage(ctx context.Context, guildID, dashboa
 	if *messageID != "" {
 		msg, err := s.session.ChannelMessage(channelID, *messageID)
 		if err == nil && msg != nil {
-			log.Printf("[Guild %s] Message for %s exists", guildID, dashboardType)
 			return nil
 		}
 		log.Printf("[Guild %s] Message for %s (ID: %s) not found in Discord, recreating", guildID, dashboardType, *messageID)
