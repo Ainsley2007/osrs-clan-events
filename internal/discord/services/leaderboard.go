@@ -269,27 +269,40 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 				rankPrefix = fmt.Sprintf("**%d.**", entry.CurrentRank)
 			}
 
-			var gainLabel string
-			if event.Type == "botw" {
-				gainLabel = "KC"
-			} else {
-				gainLabel = "XP"
-			}
-
-			// Main entry: icon/rank - name - points (gain label)
-			description.WriteString(fmt.Sprintf("%s <@%s> - `points: %s` (*%s %s*)\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)), formatNumber(int64(entry.TotalGain)), gainLabel))
-
-			// Show account breakdown for accounts with gain > 0
+			// Count accounts with gain > 0
+			accountsWithGain := 0
 			for _, acc := range entry.Accounts {
 				if acc.Gain > 0 {
-					var accGainDisplay string
-					if event.Type == "botw" {
-						accGainDisplay = fmt.Sprintf("%s KC", formatNumber(int64(acc.Gain)))
-					} else {
-						accGainDisplay = fmt.Sprintf("%s XP", formatNumber(int64(acc.Gain)))
+					accountsWithGain++
+				}
+			}
+
+			// Main entry: icon/rank - name - points (optionally with total gain if multiple accounts)
+			if accountsWithGain > 1 {
+				var gainLabel string
+				if event.Type == "botw" {
+					gainLabel = "KC"
+				} else {
+					gainLabel = "XP"
+				}
+				description.WriteString(fmt.Sprintf("%s <@%s> - `points: %s` (*%s %s*)\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)), formatNumber(int64(entry.TotalGain)), gainLabel))
+			} else {
+				description.WriteString(fmt.Sprintf("%s <@%s> - `points: %s`\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints))))
+			}
+
+			// Show account breakdown only if there are multiple accounts with gains
+			if accountsWithGain > 1 {
+				for _, acc := range entry.Accounts {
+					if acc.Gain > 0 {
+						var accGainDisplay string
+						if event.Type == "botw" {
+							accGainDisplay = fmt.Sprintf("%s KC", formatNumber(int64(acc.Gain)))
+						} else {
+							accGainDisplay = fmt.Sprintf("%s XP", formatNumber(int64(acc.Gain)))
+						}
+						// Use Unicode em spaces for indentation (Discord preserves these)
+						description.WriteString(fmt.Sprintf("\u2003• *%s: %s*\n", acc.RSN, accGainDisplay))
 					}
-					// Use Unicode em spaces for indentation (Discord preserves these)
-					description.WriteString(fmt.Sprintf("\u2003• *%s: %s*\n", acc.RSN, accGainDisplay))
 				}
 			}
 
@@ -307,8 +320,7 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 		Color:       color,
 		Timestamp:   now.Format(time.RFC3339),
 		Footer: &discordgo.MessageEmbedFooter{
-			// Discord's <t:unix:format> is localized per user's client settings
-			Text: fmt.Sprintf("Last updated <t:%d:f>", now.Unix()),
+			Text: "Last updated",
 		},
 	}, nil
 }
