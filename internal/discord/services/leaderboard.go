@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"osrs-events/internal/database"
 
@@ -245,10 +246,11 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 	}
 	description.WriteString(fmt.Sprintf("**%s:** %s\n", thresholdLabel, formatNumber(int64(thresholdValue))))
 	if event.Type == "botw" {
-		description.WriteString(fmt.Sprintf("**%s:** %g\n\n", pointsLabel, event.PointsPerKC))
+		description.WriteString(fmt.Sprintf("**%s:** %g\n", pointsLabel, event.PointsPerKC))
 	} else {
-		description.WriteString(fmt.Sprintf("**%s:** %g\n\n", pointsLabel, event.PointsPerXP))
+		description.WriteString(fmt.Sprintf("**%s:** %g\n", pointsLabel, event.PointsPerXP))
 	}
+	description.WriteString(fmt.Sprintf("**Time left:** %s\n\n", formatTimeUntil(event.EndTime)))
 
 	if len(entries) == 0 {
 		description.WriteString("No participants above threshold yet.")
@@ -287,7 +289,7 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 						accGainDisplay = fmt.Sprintf("%s XP", formatNumber(int64(acc.Gain)))
 					}
 					// Use Unicode em spaces for indentation (Discord preserves these)
-					description.WriteString(fmt.Sprintf("\u2003• *%s*: %s\n", acc.RSN, accGainDisplay))
+					description.WriteString(fmt.Sprintf("\u2003• *%s: %s*\n", acc.RSN, accGainDisplay))
 				}
 			}
 
@@ -298,11 +300,39 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 		}
 	}
 
+	now := time.Now().UTC()
 	return &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description.String(),
 		Color:       color,
+		Timestamp:   now.Format(time.RFC3339),
+		Footer: &discordgo.MessageEmbedFooter{
+			// Discord's <t:unix:format> is localized per user's client settings
+			Text: fmt.Sprintf("Last updated <t:%d:f>", now.Unix()),
+		},
 	}, nil
+}
+
+func formatTimeUntil(endTime time.Time) string {
+	end := endTime.UTC()
+	now := time.Now().UTC()
+	if end.Before(now) || end.Equal(now) {
+		return "Ended"
+	}
+	d := end.Sub(now)
+	days := int(d.Hours() / 24)
+	hours := int(d.Hours()) % 24
+	mins := int(d.Minutes()) % 60
+
+	var parts []string
+	if days > 0 {
+		parts = append(parts, fmt.Sprintf("%dd", days))
+	}
+	if hours > 0 || days > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+	}
+	parts = append(parts, fmt.Sprintf("%dm", mins))
+	return strings.Join(parts, " ") + " left"
 }
 
 func buildBossDisplayName(event *database.Event) string {
