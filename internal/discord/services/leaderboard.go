@@ -290,8 +290,7 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 				description.WriteString(fmt.Sprintf("%s <@%s> - `points: %s`\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints))))
 			}
 
-			// Show account breakdown only if there are multiple accounts with gains
-			if accountsWithGain > 1 {
+			if accountsWithGain >= 1 {
 				for _, acc := range entry.Accounts {
 					if acc.Gain > 0 {
 						var accGainDisplay string
@@ -300,13 +299,11 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 						} else {
 							accGainDisplay = fmt.Sprintf("%s XP", formatNumber(int64(acc.Gain)))
 						}
-						// Use Unicode em spaces for indentation (Discord preserves these)
 						description.WriteString(fmt.Sprintf("\u2003• *%s: %s*\n", acc.RSN, accGainDisplay))
 					}
 				}
 			}
 
-			// Add spacing between entries (except after the last one)
 			if i < len(entries)-1 {
 				description.WriteString("\n")
 			}
