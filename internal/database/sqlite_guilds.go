@@ -41,7 +41,8 @@ func (s *SQLiteStore) SaveGuild(ctx context.Context, g *Guild) error {
 func (s *SQLiteStore) GetGuild(ctx context.Context, guildID string) (*Guild, error) {
 	query := `SELECT guild_id, log_channel_id, botw_category_id, botw_channel_id, botw_overall_channel_id,
 		botw_msg_id, botw_overall_msg_id, sotw_category_id, sotw_channel_id, sotw_overall_channel_id,
-		sotw_msg_id, sotw_overall_msg_id, donation_channel_id, donation_msg_id, interval_day, interval_time
+		sotw_msg_id, sotw_overall_msg_id, COALESCE(donation_channel_id, '') as donation_channel_id, 
+		COALESCE(donation_msg_id, '') as donation_msg_id, interval_day, interval_time
 		FROM guilds WHERE guild_id = ?`
 
 	var g Guild
