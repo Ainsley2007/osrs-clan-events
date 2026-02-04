@@ -57,3 +57,14 @@ type LeaderboardStore interface {
 	GetParticipant(ctx context.Context, discordUserID, guildID string) (*database.Participant, error)
 	GetParticipantsByGuild(ctx context.Context, guildID string) ([]*database.Participant, error)
 }
+
+// DonationStore is the minimal persistence interface for donation workflows.
+type DonationStore interface {
+	GetGuild(ctx context.Context, guildID string) (*database.Guild, error)
+	SaveDonation(ctx context.Context, donation *database.Donation) error
+	GetDonationsByGuild(ctx context.Context, guildID string) ([]*database.Donation, error)
+	GetTotalDonatedByUser(ctx context.Context, guildID, discordUserID string) (int64, error)
+	SaveDonationSpending(ctx context.Context, spending *database.DonationSpending) error
+	GetTotalSpent(ctx context.Context, guildID string) (int64, error)
+	UpdateDonationMessageID(ctx context.Context, guildID, messageID string) error
+}

@@ -18,6 +18,8 @@ type Guild struct {
 	SotwOverallChannelID string
 	SotwMsgID            string
 	SotwOverallMsgID     string
+	DonationChannelID    string
+	DonationMsgID        string
 	IntervalDay          string
 	IntervalTime         string
 }
@@ -73,6 +75,24 @@ type ParticipantPointUpdate struct {
 	SotwPoints    int
 }
 
+type Donation struct {
+	ID            int64
+	GuildID       string
+	DiscordUserID string
+	Amount        int64
+	CreatedAt     time.Time
+	CreatedBy     string
+}
+
+type DonationSpending struct {
+	ID          int64
+	GuildID     string
+	Amount      int64
+	Description string
+	CreatedAt   time.Time
+	CreatedBy   string
+}
+
 type Store interface {
 	// Guilds
 	SaveGuild(ctx context.Context, guild *Guild) error
@@ -118,6 +138,15 @@ type Store interface {
 
 	// Points
 	UpdateParticipantPoints(ctx context.Context, updates []*ParticipantPointUpdate) error
+
+	// Donations
+	SaveDonation(ctx context.Context, donation *Donation) error
+	GetDonationsByGuild(ctx context.Context, guildID string) ([]*Donation, error)
+	GetTotalDonatedByUser(ctx context.Context, guildID, discordUserID string) (int64, error)
+	SaveDonationSpending(ctx context.Context, spending *DonationSpending) error
+	GetTotalSpent(ctx context.Context, guildID string) (int64, error)
+	UpdateDonationChannel(ctx context.Context, guildID, channelID string) error
+	UpdateDonationMessageID(ctx context.Context, guildID, messageID string) error
 
 	Close() error
 }

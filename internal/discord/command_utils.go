@@ -2,6 +2,7 @@ package discord
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -41,4 +42,19 @@ func getTargetUser(s *discordgo.Session, i *discordgo.InteractionCreate, optionN
 	}
 
 	return commandUser, false, nil
+}
+
+func formatNumber(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	if len(s) <= 3 {
+		return s
+	}
+	var result strings.Builder
+	for i, r := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result.WriteRune(',')
+		}
+		result.WriteRune(r)
+	}
+	return result.String()
 }
