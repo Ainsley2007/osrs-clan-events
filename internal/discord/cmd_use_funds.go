@@ -16,10 +16,11 @@ func (b *Bot) useFundsCommand() Command {
 			DefaultMemberPermissions: ptr(int64(discordgo.PermissionAdministrator)),
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionInteger,
+					Type:        discordgo.ApplicationCommandOptionNumber,
 					Name:        "amount",
-					Description: "Amount to spend",
+					Description: "Amount to spend in millions (e.g. 1.5 = 1.5m, 100 = 100m)",
 					Required:    true,
+					MinValue:    ptr(1.0),
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -46,18 +47,19 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 	ctx := context.Background()
 	data := i.ApplicationCommandData()
 
-	var amount int
+	var amountM float64
 	var description string
 	for _, opt := range data.Options {
 		switch opt.Name {
 		case "amount":
-			amount = int(opt.IntValue())
+			amountM = opt.FloatValue()
 		case "description":
 			description = opt.StringValue()
 		}
 	}
 
-	if amount <= 0 {
+	amountGP := int64(amountM * 1_000_000)
+	if amountGP <= 0 {
 		respondError(s, i.Interaction, errors.New("amount must be positive"))
 		return
 	}
@@ -69,7 +71,7 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	err = b.DonationService.UseFunds(ctx, i.GuildID, amount, description, i.Member.User.ID)
+	err = b.DonationService.UseFunds(ctx, i.GuildID, amountGP, description, i.Member.User.ID)
 	if err != nil {
 		respondError(s, i.Interaction, err)
 		return
@@ -79,7 +81,7 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 	if description != "" {
 		descText = fmt.Sprintf(": %s", description)
 	}
-	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Used `%s` from clan fund%s.", formatNumber(int64(amount)), descText))
+	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Used `%s` from clan fund%s.", formatAmountM(amountGP), descText))
 
 	// Update leaderboard
 	if err := b.DonationService.UpdateLeaderboard(ctx, i.GuildID); err != nil {
@@ -88,6 +90,6 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	// Log to logging channel
-	logMsg := fmt.Sprintf("➖ <@%s> used `%s` from clan fund%s.", i.Member.User.ID, formatNumber(int64(amount)), descText)
+	logMsg := fmt.Sprintf("➖ <@%s> used `%s` from clan fund%s.", i.Member.User.ID, formatAmountM(amountGP), descText)
 	b.logAction(ctx, i.GuildID, logMsg)
 }

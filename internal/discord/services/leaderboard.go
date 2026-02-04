@@ -44,6 +44,12 @@ func formatNumber(n int64) string {
 	return result.String()
 }
 
+// formatAmountM formats a donation/fund amount (actual GP) with "m" suffix, e.g. 1500000 → "1.5m", 100000000 → "100m"
+func formatAmountM(gp int64) string {
+	millions := float64(gp) / 1_000_000
+	return fmt.Sprintf("%gm", millions)
+}
+
 type LeaderboardEntry struct {
 	DiscordID    string
 	DiscordName  string

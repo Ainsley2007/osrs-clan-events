@@ -39,15 +39,15 @@ type FundsSummary struct {
 	Available    int64
 }
 
-func (s *DonationService) AddDonation(ctx context.Context, guildID, userID string, amount int, createdBy string) error {
-	if amount <= 0 {
+func (s *DonationService) AddDonation(ctx context.Context, guildID, userID string, amountGP int64, createdBy string) error {
+	if amountGP <= 0 {
 		return fmt.Errorf("donation amount must be positive")
 	}
 
 	donation := &database.Donation{
 		GuildID:       guildID,
 		DiscordUserID: userID,
-		Amount:        int64(amount),
+		Amount:        amountGP,
 		CreatedAt:     time.Now().UTC(),
 		CreatedBy:     createdBy,
 	}
@@ -55,8 +55,8 @@ func (s *DonationService) AddDonation(ctx context.Context, guildID, userID strin
 	return s.store.SaveDonation(ctx, donation)
 }
 
-func (s *DonationService) UseFunds(ctx context.Context, guildID string, amount int, description string, createdBy string) error {
-	if amount <= 0 {
+func (s *DonationService) UseFunds(ctx context.Context, guildID string, amountGP int64, description string, createdBy string) error {
+	if amountGP <= 0 {
 		return fmt.Errorf("amount must be positive")
 	}
 
@@ -66,13 +66,13 @@ func (s *DonationService) UseFunds(ctx context.Context, guildID string, amount i
 		return fmt.Errorf("failed to get funds summary: %w", err)
 	}
 
-	if summary.Available < int64(amount) {
-		return fmt.Errorf("insufficient funds: available %s, requested %s", formatNumber(summary.Available), formatNumber(int64(amount)))
+	if summary.Available < amountGP {
+		return fmt.Errorf("insufficient funds: available %s, requested %s", formatAmountM(summary.Available), formatAmountM(amountGP))
 	}
 
 	spending := &database.DonationSpending{
 		GuildID:     guildID,
-		Amount:      int64(amount),
+		Amount:      amountGP,
 		Description: description,
 		CreatedAt:   time.Now().UTC(),
 		CreatedBy:   createdBy,
@@ -207,9 +207,9 @@ func (s *DonationService) buildDonationLeaderboardEmbed(ctx context.Context, gui
 
 	var description strings.Builder
 	description.WriteString("**Summary:**\n")
-	description.WriteString(fmt.Sprintf("Total Contributed to Fund: `%s`\n", formatNumber(summary.TotalDonated)))
-	description.WriteString(fmt.Sprintf("Total Spent from Fund: `%s`\n", formatNumber(summary.TotalSpent)))
-	description.WriteString(fmt.Sprintf("Available Fund: `%s`\n\n", formatNumber(summary.Available)))
+	description.WriteString(fmt.Sprintf("Total Contributed to Fund: `%s`\n", formatAmountM(summary.TotalDonated)))
+	description.WriteString(fmt.Sprintf("Total Spent from Fund: `%s`\n", formatAmountM(summary.TotalSpent)))
+	description.WriteString(fmt.Sprintf("Available Fund: `%s`\n\n", formatAmountM(summary.Available)))
 
 	if len(entries) == 0 {
 		description.WriteString("No donations yet.")
@@ -232,7 +232,7 @@ func (s *DonationService) buildDonationLeaderboardEmbed(ctx context.Context, gui
 				rankPrefix = fmt.Sprintf("**%d.**", entry.CurrentRank)
 			}
 
-			description.WriteString(fmt.Sprintf("%s <@%s> - `%s`\n", rankPrefix, entry.DiscordID, formatNumber(entry.TotalAmount)))
+			description.WriteString(fmt.Sprintf("%s <@%s> - `%s`\n", rankPrefix, entry.DiscordID, formatAmountM(entry.TotalAmount)))
 
 			if i < len(entries)-1 && i < 19 {
 				description.WriteString("\n")

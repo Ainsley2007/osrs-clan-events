@@ -22,10 +22,11 @@ func (b *Bot) addDonationCommand() Command {
 					Required:    true,
 				},
 				{
-					Type:        discordgo.ApplicationCommandOptionInteger,
+					Type:        discordgo.ApplicationCommandOptionNumber,
 					Name:        "amount",
-					Description: "Donation amount",
+					Description: "Donation amount in millions (e.g. 1.5 = 1.5m, 100 = 100m)",
 					Required:    true,
+					MinValue:    ptr(1.0),
 				},
 			},
 		},
@@ -47,13 +48,13 @@ func (b *Bot) handleAddDonation(s *discordgo.Session, i *discordgo.InteractionCr
 	data := i.ApplicationCommandData()
 
 	var targetUserID string
-	var amount int
+	var amountM float64
 	for _, opt := range data.Options {
 		switch opt.Name {
 		case "user":
 			targetUserID = opt.UserValue(s).ID
 		case "amount":
-			amount = int(opt.IntValue())
+			amountM = opt.FloatValue()
 		}
 	}
 
@@ -69,18 +70,19 @@ func (b *Bot) handleAddDonation(s *discordgo.Session, i *discordgo.InteractionCr
 		return
 	}
 
-	if amount <= 0 {
+	amountGP := int64(amountM * 1_000_000)
+	if amountGP <= 0 {
 		respondError(s, i.Interaction, errors.New("donation amount must be positive"))
 		return
 	}
 
-	err = b.DonationService.AddDonation(ctx, i.GuildID, targetUserID, amount, i.Member.User.ID)
+	err = b.DonationService.AddDonation(ctx, i.GuildID, targetUserID, amountGP, i.Member.User.ID)
 	if err != nil {
 		respondError(s, i.Interaction, fmt.Errorf("failed to add donation: %w", err))
 		return
 	}
 
-	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Added `%s` to clan fund from <@%s>.", formatNumber(int64(amount)), targetUserID))
+	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Added `%s` to clan fund from <@%s>.", formatAmountM(amountGP), targetUserID))
 
 	// Update leaderboard
 	if err := b.DonationService.UpdateLeaderboard(ctx, i.GuildID); err != nil {
@@ -89,6 +91,6 @@ func (b *Bot) handleAddDonation(s *discordgo.Session, i *discordgo.InteractionCr
 	}
 
 	// Log to logging channel
-	logMsg := fmt.Sprintf("➕ <@%s> added `%s` to clan fund from <@%s>.", i.Member.User.ID, formatNumber(int64(amount)), targetUserID)
+	logMsg := fmt.Sprintf("➕ <@%s> added `%s` to clan fund from <@%s>.", i.Member.User.ID, formatAmountM(amountGP), targetUserID)
 	b.logAction(ctx, i.GuildID, logMsg)
 }
