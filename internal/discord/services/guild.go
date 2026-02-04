@@ -40,3 +40,13 @@ func (s *GuildService) UpdateLogChannel(ctx context.Context, guildID, channelID 
 	guild.LogChannelID = channelID
 	return s.store.SaveGuild(ctx, guild)
 }
+
+func (s *GuildService) UpdateDonationChannel(ctx context.Context, guildID, channelID string) error {
+	guild, err := s.GetOrCreateGuild(ctx, guildID)
+	if err != nil {
+		return err
+	}
+
+	guild.DonationChannelID = channelID
+	return s.store.SaveGuild(ctx, guild)
+}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -50,6 +51,8 @@ func (s *SQLiteStore) init() error {
 			sotw_overall_channel_id TEXT,
 			sotw_msg_id TEXT,
 			sotw_overall_msg_id TEXT,
+			donation_channel_id TEXT,
+			donation_msg_id TEXT,
 			interval_day TEXT DEFAULT 'Sunday',
 			interval_time TEXT DEFAULT '22:00'
 		);`,
@@ -93,6 +96,24 @@ func (s *SQLiteStore) init() error {
 			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 			FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 		);`,
+		`CREATE TABLE IF NOT EXISTS donations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			guild_id TEXT NOT NULL,
+			discord_user_id TEXT NOT NULL,
+			amount INTEGER NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			created_by TEXT NOT NULL,
+			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
+		);`,
+		`CREATE TABLE IF NOT EXISTS donation_spending (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			guild_id TEXT NOT NULL,
+			amount INTEGER NOT NULL,
+			description TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			created_by TEXT NOT NULL,
+			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
+		);`,
 	}
 
 	for _, query := range queries {
@@ -100,6 +121,26 @@ func (s *SQLiteStore) init() error {
 			return fmt.Errorf("failed to execute query %q: %w", query, err)
 		}
 	}
+	
+	// Migrations: Add donation columns to existing guilds table (safe to run multiple times)
+	// SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we ignore errors if columns already exist
+	migrationQueries := []string{
+		`ALTER TABLE guilds ADD COLUMN donation_channel_id TEXT;`,
+		`ALTER TABLE guilds ADD COLUMN donation_msg_id TEXT;`,
+	}
+	
+	for _, query := range migrationQueries {
+		// Ignore errors if column already exists (SQLite returns "duplicate column name" error)
+		// This is safe for production - existing databases will have the columns, new ones will get them created
+		if _, err := s.db.Exec(query); err != nil {
+			// Check if error is about duplicate column (expected for existing databases)
+			if !strings.Contains(err.Error(), "duplicate column") {
+				// Log unexpected errors but don't fail initialization
+				log.Printf("Warning: migration query failed (may be expected): %v", err)
+			}
+		}
+	}
+	
 	return nil
 }
 

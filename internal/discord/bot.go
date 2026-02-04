@@ -23,10 +23,12 @@ type Bot struct {
 	SnapshotService    *services.SnapshotService
 	LeaderboardService *services.LeaderboardService
 	ParticipantService *services.ParticipantService
+	DonationService    *services.DonationService
 	Handlers           map[string]Command
 
 	mu             sync.Mutex
 	initInProgress map[string]bool
+	logger         *log.Logger
 }
 
 func New(token string, store database.Store, osrsClient *osrs.Client, firebaseClient *firebase.RemoteConfigClient) (*Bot, error) {
@@ -44,6 +46,7 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 	accountService := services.NewAccountService(store, snapshotService, leaderboardService, logger)
 	participantService := services.NewParticipantService(store)
 	initializerService := services.NewInitializerService(dg, store, leaderboardService)
+	donationService := services.NewDonationService(store, dg, logger)
 
 	bot := &Bot{
 		Session:            dg,
@@ -55,7 +58,9 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 		SnapshotService:    snapshotService,
 		LeaderboardService: leaderboardService,
 		ParticipantService: participantService,
+		DonationService:    donationService,
 		initInProgress:     make(map[string]bool),
+		logger:             logger,
 	}
 
 	bot.setupCommands()
