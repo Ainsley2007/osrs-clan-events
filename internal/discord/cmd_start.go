@@ -70,21 +70,11 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 		return
 	}
 
-	// Update weekly leaderboards
-	if err := b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw"); err != nil {
-		log.Printf("Failed to update BOTW weekly leaderboard: %v", err)
-	}
-	if err := b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw"); err != nil {
-		log.Printf("Failed to update SOTW weekly leaderboard: %v", err)
-	}
-
-	// Update overall leaderboards
-	if err := b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw"); err != nil {
-		log.Printf("Failed to update BOTW overall leaderboard: %v", err)
-	}
-	if err := b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw"); err != nil {
-		log.Printf("Failed to update SOTW overall leaderboard: %v", err)
-	}
+	// Update weekly and overall leaderboards (leaderboard service logs failures)
+	b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw")
+	b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw")
+	b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw")
+	b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw")
 
 	guild, err := b.Store.GetGuild(ctx, i.GuildID)
 	if err == nil {
@@ -99,21 +89,6 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 				botwResult.Event.WeekNumber, sotwResult.Event.WeekNumber, i.Member.User.ID)
 		}
 
-		// Log initial snapshot results locally
-		if botwResult.SnapshotResult != nil {
-			if len(botwResult.SnapshotResult.FailedRSNs) > 0 {
-				log.Printf("[Guild %s] Initial BOTW snapshots (Week %d): %d accounts processed in %s, %d failed: %v", i.GuildID, botwResult.Event.WeekNumber, botwResult.SnapshotResult.SuccessCount, botwResult.SnapshotResult.Duration.Round(time.Millisecond), len(botwResult.SnapshotResult.FailedRSNs), botwResult.SnapshotResult.FailedRSNs)
-			} else {
-				log.Printf("[Guild %s] Initial BOTW snapshots (Week %d): %d accounts processed in %s", i.GuildID, botwResult.Event.WeekNumber, botwResult.SnapshotResult.SuccessCount, botwResult.SnapshotResult.Duration.Round(time.Millisecond))
-			}
-		}
-		if sotwResult.SnapshotResult != nil {
-			if len(sotwResult.SnapshotResult.FailedRSNs) > 0 {
-				log.Printf("[Guild %s] Initial SOTW snapshots (Week %d): %d accounts processed in %s, %d failed: %v", i.GuildID, sotwResult.Event.WeekNumber, sotwResult.SnapshotResult.SuccessCount, sotwResult.SnapshotResult.Duration.Round(time.Millisecond), len(sotwResult.SnapshotResult.FailedRSNs), sotwResult.SnapshotResult.FailedRSNs)
-			} else {
-				log.Printf("[Guild %s] Initial SOTW snapshots (Week %d): %d accounts processed in %s", i.GuildID, sotwResult.Event.WeekNumber, sotwResult.SnapshotResult.SuccessCount, sotwResult.SnapshotResult.Duration.Round(time.Millisecond))
-			}
-		}
 	}
 
 	// Edit deferred reply with simple success message

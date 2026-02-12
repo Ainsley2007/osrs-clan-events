@@ -19,6 +19,10 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(0)
+
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
@@ -32,7 +36,12 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 }
 
 func (s *SQLiteStore) init() error {
-	// Enable foreign keys
+	if _, err := s.db.Exec("PRAGMA journal_mode = WAL;"); err != nil {
+		return fmt.Errorf("failed to enable WAL mode: %w", err)
+	}
+	if _, err := s.db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
+		return fmt.Errorf("failed to set busy timeout: %w", err)
+	}
 	if _, err := s.db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
 		return fmt.Errorf("failed to enable foreign keys: %w", err)
 	}

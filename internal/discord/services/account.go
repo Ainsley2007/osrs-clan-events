@@ -115,30 +115,29 @@ func (s *AccountService) createSnapshotsForActiveEvents(ctx context.Context, acc
 		eventStartUTC := botwEvent.StartTime.UTC()
 		if eventStartUTC.Before(now) || eventStartUTC.Equal(now) {
 			eventsToCreate = append(eventsToCreate, botwEvent)
-			s.logger.Printf("Creating BOTW snapshot for account %s in Week %d event", account.RSN, botwEvent.WeekNumber)
-		} else {
-			s.logger.Printf("BOTW Week %d event has not started yet (starts at %v UTC, now is %v UTC)", botwEvent.WeekNumber, eventStartUTC, now)
 		}
-	} else {
-		s.logger.Printf("No active BOTW event found for guild %s", guildID)
 	}
-
 	if sotwEvent != nil {
 		eventStartUTC := sotwEvent.StartTime.UTC()
 		if eventStartUTC.Before(now) || eventStartUTC.Equal(now) {
 			eventsToCreate = append(eventsToCreate, sotwEvent)
-			s.logger.Printf("Creating SOTW snapshot for account %s in Week %d event", account.RSN, sotwEvent.WeekNumber)
-		} else {
-			s.logger.Printf("SOTW Week %d event has not started yet (starts at %v UTC, now is %v UTC)", sotwEvent.WeekNumber, eventStartUTC, now)
 		}
-	} else {
-		s.logger.Printf("No active SOTW event found for guild %s", guildID)
 	}
 
 	if len(eventsToCreate) == 0 {
-		s.logger.Printf("No snapshots created for account %s - no active events that have started", account.RSN)
 		return nil
 	}
+
+	// Single combined log line per account
+	var parts []string
+	for _, e := range eventsToCreate {
+		if e.Type == "botw" {
+			parts = append(parts, fmt.Sprintf("BOTW week %d", e.WeekNumber))
+		} else {
+			parts = append(parts, fmt.Sprintf("SOTW week %d", e.WeekNumber))
+		}
+	}
+	s.logger.Printf("Account %s: creating snapshots for %s", account.RSN, strings.Join(parts, ", "))
 
 	// Create snapshots for all events efficiently (fetch stats once)
 	if err := s.snapshotService.CreateSnapshotsForAccount(ctx, eventsToCreate, account); err != nil {

@@ -5,6 +5,7 @@
 #   - .env              → loaded via env_file (DISCORD_TOKEN, GOOGLE_APPLICATION_CREDENTIALS, etc.)
 #   - firebase-credentials.json → mounted read-only; path set in .env as GOOGLE_APPLICATION_CREDENTIALS
 #   - ./data            → DB file persists here as ./data/osrs_events.db
+#   - ./logs            → app logs (~24h rotation), survives container replacement
 #
 services:
   osrs-events:
@@ -14,9 +15,11 @@ services:
     volumes:
       - ./data:/app/data
       - ./firebase-credentials.json:/app/firebase-credentials.json:ro
+      - ./logs:/app/logs
     env_file:
       - .env
     environment:
       - DATABASE_PATH=/app/data/osrs_events.db
+      - LOG_FILE=/app/logs/app.log
     labels:
       - com.centurylinklabs.watchtower.enable=true

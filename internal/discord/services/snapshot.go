@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -15,12 +14,14 @@ import (
 type SnapshotService struct {
 	store      SnapshotStore
 	osrsClient *osrs.Client
+	logger     Logger
 }
 
-func NewSnapshotService(store SnapshotStore, osrsClient *osrs.Client) *SnapshotService {
+func NewSnapshotService(store SnapshotStore, osrsClient *osrs.Client, logger Logger) *SnapshotService {
 	return &SnapshotService{
 		store:      store,
 		osrsClient: osrsClient,
+		logger:     logger,
 	}
 }
 
@@ -59,19 +60,15 @@ func (s *SnapshotService) CreateInitialSnapshotsWithResult(ctx context.Context, 
 
 	// Fetch stats once per account and create snapshot
 	for _, account := range accounts {
-		// Fetch player stats once for this account
 		stats, err := s.osrsClient.GetPlayerStats(ctx, account.RSN)
 		if err != nil {
 			failedRSNs = append(failedRSNs, account.RSN)
-			log.Printf("Failed to fetch stats for %s during initial snapshot: %v", account.RSN, err)
 			continue
 		}
 
-		// Extract metric value from cached stats
 		value, err := s.extractMetricValueFromStats(stats, event)
 		if err != nil {
 			failedRSNs = append(failedRSNs, account.RSN)
-			log.Printf("Failed to extract metric for %s during initial snapshot: %v", account.RSN, err)
 			continue
 		}
 
@@ -84,11 +81,14 @@ func (s *SnapshotService) CreateInitialSnapshotsWithResult(ctx context.Context, 
 
 		if err := s.store.CreateSnapshot(ctx, snapshot); err != nil {
 			failedRSNs = append(failedRSNs, account.RSN)
-			log.Printf("Failed to create snapshot for %s: %v", account.RSN, err)
 			continue
 		}
 
 		successCount++
+	}
+
+	if s.logger != nil {
+		s.logger.Printf("OSRS API initial snapshots: %d ok, %d failed (%s)", successCount, len(failedRSNs), strings.Join(failedRSNs, ", "))
 	}
 
 	return &InitialSnapshotResult{
@@ -367,7 +367,9 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 	for _, event := range events {
 		snapshots, err := s.store.GetSnapshotsByEvent(ctx, event.ID)
 		if err != nil {
-			log.Printf("Failed to get snapshots for event %d: %v", event.ID, err)
+			if s.logger != nil {
+				s.logger.Printf("Failed to get snapshots for event %d: %v", event.ID, err)
+			}
 			continue
 		}
 		if hasSnapshot[event.ID] == nil {
@@ -393,7 +395,9 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 	for _, event := range events {
 		accounts, err := s.store.GetAccountsByGuild(ctx, event.GuildID)
 		if err != nil {
-			log.Printf("Failed to get accounts for guild %s (event %d): %v", event.GuildID, event.ID, err)
+			if s.logger != nil {
+				s.logger.Printf("Failed to get accounts for guild %s (event %d): %v", event.GuildID, event.ID, err)
+			}
 			continue
 		}
 		eventHas := hasSnapshot[event.ID]
@@ -466,6 +470,21 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 				}
 			}
 		}
+	}
+
+	if s.logger != nil {
+		total := len(accountSnapshotsMap)
+		failedRSNSet := make(map[string]struct{})
+		for _, f := range failedUpdates {
+			failedRSNSet[f.RSN] = struct{}{}
+		}
+		failedCount := len(failedRSNSet)
+		okCount := total - failedCount
+		failedRSNs := make([]string, 0, failedCount)
+		for rsn := range failedRSNSet {
+			failedRSNs = append(failedRSNs, rsn)
+		}
+		s.logger.Printf("OSRS API: %d fetches OK, %d failed (%s)", okCount, failedCount, strings.Join(failedRSNs, ", "))
 	}
 
 	return &UpdateSnapshotsForEventsResult{

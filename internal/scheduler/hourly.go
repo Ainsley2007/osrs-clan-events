@@ -91,13 +91,8 @@ func (s *Scheduler) updateActiveSnapshots() {
 	}
 
 	for guildID := range guildsMap {
-		// Update weekly leaderboards for this guild
-		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw"); err != nil {
-			log.Printf("Failed to update BOTW weekly leaderboard for guild %s: %v", guildID, err)
-		}
-		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw"); err != nil {
-			log.Printf("Failed to update SOTW weekly leaderboard for guild %s: %v", guildID, err)
-		}
+		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw")
+		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw")
 	}
 
 	log.Printf("Hourly snapshot update completed: %d events across %d guilds", len(events), len(guildsMap))

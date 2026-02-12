@@ -309,22 +309,10 @@ func (s *InitializerService) ensureMessage(ctx context.Context, guildID, dashboa
 }
 
 func (s *InitializerService) refreshLeaderboards(ctx context.Context, guildID string) error {
-	// Update weekly leaderboards if active events exist
-	if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw"); err != nil {
-		// Log but don't fail - event might not exist
-		log.Printf("[Guild %s] Could not update BOTW weekly leaderboard: %v", guildID, err)
-	}
-	if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw"); err != nil {
-		log.Printf("[Guild %s] Could not update SOTW weekly leaderboard: %v", guildID, err)
-	}
-
-	// Always update overall leaderboards (they don't require active events)
-	if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "botw"); err != nil {
-		log.Printf("[Guild %s] Could not update BOTW overall leaderboard: %v", guildID, err)
-	}
-	if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "sotw"); err != nil {
-		log.Printf("[Guild %s] Could not update SOTW overall leaderboard: %v", guildID, err)
-	}
-
+	// Update weekly and overall leaderboards (leaderboard service logs failures)
+	s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw")
+	s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw")
+	s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "botw")
+	s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "sotw")
 	return nil
 }

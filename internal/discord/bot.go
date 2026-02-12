@@ -38,7 +38,7 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 	}
 
 	logger := log.Default()
-	snapshotService := services.NewSnapshotService(store, osrsClient)
+	snapshotService := services.NewSnapshotService(store, osrsClient, logger)
 	eventService := services.NewEventService(store, snapshotService, firebaseClient)
 	leaderboardService := services.NewLeaderboardService(store, dg, logger)
 
@@ -99,7 +99,28 @@ func (b *Bot) ready(s *discordgo.Session, event *discordgo.Ready) {
 func (b *Bot) interactionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
-		if cmd, ok := b.Handlers[i.ApplicationCommandData().Name]; ok {
+		cmdName := i.ApplicationCommandData().Name
+		if cmd, ok := b.Handlers[cmdName]; ok {
+			// Log command used: guild (ID + name when in cache), user (ID + username)
+			guildID := i.GuildID
+			guildName := ""
+			if g, err := s.State.Guild(guildID); err == nil && g != nil {
+				guildName = g.Name
+			}
+			userID := ""
+			username := ""
+			if i.Member != nil && i.Member.User != nil {
+				userID = i.Member.User.ID
+				username = i.Member.User.Username
+			} else if i.User != nil {
+				userID = i.User.ID
+				username = i.User.Username
+			}
+			if guildName != "" {
+				b.logger.Printf("command=%s guild=%s (%s) user=%s (%s)", cmdName, guildID, guildName, userID, username)
+			} else {
+				b.logger.Printf("command=%s guild=%s user=%s (%s)", cmdName, guildID, userID, username)
+			}
 			cmd.Handler(s, i)
 		}
 	case discordgo.InteractionApplicationCommandAutocomplete:

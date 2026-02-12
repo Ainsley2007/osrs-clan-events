@@ -85,28 +85,14 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			sotwPointsAwarded = len(snapshots)
 		}
 
-		// Update weekly leaderboards (will show final state)
+		// Update weekly and overall leaderboards (leaderboard service logs failures)
 		if len(activeBotwEvents) > 0 {
-			if err := b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw"); err != nil {
-				log.Printf("Failed to update BOTW weekly leaderboard: %v", err)
-			}
+			b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw")
+			b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw")
 		}
 		if len(activeSotwEvents) > 0 {
-			if err := b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw"); err != nil {
-				log.Printf("Failed to update SOTW weekly leaderboard: %v", err)
-			}
-		}
-
-		// Update overall leaderboards
-		if len(activeBotwEvents) > 0 {
-			if err := b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw"); err != nil {
-				log.Printf("Failed to update BOTW overall leaderboard: %v", err)
-			}
-		}
-		if len(activeSotwEvents) > 0 {
-			if err := b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw"); err != nil {
-				log.Printf("Failed to update SOTW overall leaderboard: %v", err)
-			}
+			b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw")
+			b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw")
 		}
 
 		guild, err := b.Store.GetGuild(ctx, i.GuildID)
