@@ -52,8 +52,9 @@ func (s *Scheduler) Start() {
 		s.processEventCompletionsForEvents(staleEvents)
 	}
 
-	// Take initial snapshot update for all active events asynchronously (don't block startup)
+	// Take initial snapshot update after a short delay so guild initialization (DB-heavy) can finish first and avoid SQLITE_BUSY.
 	go func() {
+		time.Sleep(45 * time.Second)
 		log.Println("Taking initial snapshot update for active events...")
 		s.updateActiveSnapshots()
 	}()

@@ -62,7 +62,11 @@ func (s *Scheduler) updateActiveSnapshots() {
 		return
 	}
 
-	// Log snapshot update summary locally (grouped by guild)
+	// One global summary (TotalAccounts is unique accounts across all guilds, not per-guild)
+	log.Printf("Hourly snapshot update: %d unique accounts, %d events across %d guilds, completed in %s",
+		result.TotalAccounts, len(events), len(guildsMap), result.Duration.Round(time.Millisecond))
+
+	// Per-guild only when there are failures
 	for guildID := range guildsMap {
 		var failedRSNs []string
 		for _, failed := range result.FailedUpdates {
@@ -71,9 +75,7 @@ func (s *Scheduler) updateActiveSnapshots() {
 			}
 		}
 		if len(failedRSNs) > 0 {
-			log.Printf("[Guild %s] Hourly snapshot update: %d accounts processed in %s, %d failed: %v", guildID, result.TotalAccounts, result.Duration.Round(time.Millisecond), len(failedRSNs), failedRSNs)
-		} else {
-			log.Printf("[Guild %s] Hourly snapshot update: %d accounts processed in %s", guildID, result.TotalAccounts, result.Duration.Round(time.Millisecond))
+			log.Printf("[Guild %s] %d accounts failed: %v", guildID, len(failedRSNs), failedRSNs)
 		}
 	}
 
@@ -94,6 +96,4 @@ func (s *Scheduler) updateActiveSnapshots() {
 		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw")
 		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw")
 	}
-
-	log.Printf("Hourly snapshot update completed: %d events across %d guilds", len(events), len(guildsMap))
 }
