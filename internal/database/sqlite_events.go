@@ -163,13 +163,14 @@ func (s *SQLiteStore) GetAllActiveEvents(ctx context.Context) ([]*Event, error) 
 }
 
 func (s *SQLiteStore) GetExpiringEvents(ctx context.Context) ([]*Event, error) {
-	// Find events that have ended (within 1 minute window to catch them reliably)
-	// This ensures we process rollovers at the exact end time ± a few seconds
+	// Find events that have ended (within 5 minute window to catch them reliably)
+	// Wider window ensures we don't miss events if a previous rollover takes longer than expected
+	// This ensures we process rollovers at the exact end time ± a few minutes
 	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
 		FROM events 
 		WHERE is_active = 1 
 		AND end_time <= datetime('now')
-		AND end_time >= datetime('now', '-1 minute')
+		AND end_time >= datetime('now', '-5 minutes')
 		ORDER BY end_time ASC`
 
 	rows, err := s.db.QueryContext(ctx, query)
