@@ -291,9 +291,9 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 				} else {
 					gainLabel = "XP"
 				}
-				description.WriteString(fmt.Sprintf("%s <@%s> - `points: %s` (*%s %s*)\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)), formatNumber(int64(entry.TotalGain)), gainLabel))
+				description.WriteString(fmt.Sprintf("%s <@%s> - points: `%s` (*%s %s*)\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)), formatNumber(int64(entry.TotalGain)), gainLabel))
 			} else {
-				description.WriteString(fmt.Sprintf("%s <@%s> - `points: %s`\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints))))
+				description.WriteString(fmt.Sprintf("%s <@%s> - points: `%s`\n", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints))))
 			}
 
 			if accountsWithGain >= 1 {
