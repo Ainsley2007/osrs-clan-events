@@ -223,12 +223,11 @@ func (s *EventService) CompleteEventWithoutSnapshotUpdate(ctx context.Context, e
 	return nil
 }
 
-func (s *EventService) AutoRollover(ctx context.Context, guildID string, eventType string, startTime time.Time) (*StartEventResult, error) {
+// StartNewEvent creates a new event after the old one has been completed
+// This is used during rollover to ensure old event is fully processed before new one starts
+func (s *EventService) StartNewEvent(ctx context.Context, guildID string, eventType string, startTime time.Time) (*StartEventResult, error) {
 	if eventType == "botw" {
-		result, err := s.StartBotw(ctx, guildID, startTime)
-		return result, err
+		return s.StartBotw(ctx, guildID, startTime)
 	}
-
-	result, err := s.StartSotw(ctx, guildID, startTime)
-	return result, err
+	return s.StartSotw(ctx, guildID, startTime)
 }

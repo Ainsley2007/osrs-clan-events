@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"log"
+	"sort"
 	"time"
 
 	"osrs-events/internal/database"
@@ -65,6 +66,9 @@ func (s *Scheduler) processEventCompletions() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
+	// First, clean up any stale active events (safety mechanism)
+	s.cleanupStaleActiveEvents(ctx)
+
 	events, err := s.store.GetExpiringEvents(ctx)
 	if err != nil {
 		log.Printf("Error getting expiring events: %v", err)
@@ -72,6 +76,61 @@ func (s *Scheduler) processEventCompletions() {
 	}
 
 	s.processEventCompletionsForEvents(events)
+}
+
+// cleanupStaleActiveEvents is a safety mechanism to handle cases where multiple active events
+// of the same type exist for a guild (should be prevented by unique index, but this handles legacy data)
+func (s *Scheduler) cleanupStaleActiveEvents(ctx context.Context) {
+	// Get all active events grouped by guild and type
+	allActiveEvents, err := s.store.GetAllActiveEvents(ctx)
+	if err != nil {
+		log.Printf("Error getting active events for cleanup: %v", err)
+		return
+	}
+
+	// Group by guild_id + type
+	type eventKey struct {
+		guildID   string
+		eventType string
+	}
+	eventsByKey := make(map[eventKey][]*database.Event)
+	for _, event := range allActiveEvents {
+		key := eventKey{guildID: event.GuildID, eventType: event.Type}
+		eventsByKey[key] = append(eventsByKey[key], event)
+	}
+
+	// Check for duplicates and deactivate older ones
+	for key, events := range eventsByKey {
+		if len(events) <= 1 {
+			continue
+		}
+
+		log.Printf("⚠️  WARNING: Found %d active %s events for guild %s - cleaning up", len(events), key.eventType, key.guildID)
+
+		// Sort by start time descending (newest first)
+		sort.Slice(events, func(i, j int) bool {
+			return events[i].StartTime.After(events[j].StartTime)
+		})
+
+		// Keep the newest, properly complete all others (calculate points, then deactivate)
+		for i := 1; i < len(events); i++ {
+			oldEvent := events[i]
+			log.Printf("  ⚠️  Completing stale active event ID %d (week %d, started %s)", 
+				oldEvent.ID, oldEvent.WeekNumber, oldEvent.StartTime.Format("2006-01-02 15:04"))
+			
+			// Properly complete the event (calculates and awards points)
+			if err := s.eventService.CompleteEvent(ctx, oldEvent); err != nil {
+				log.Printf("  ❌ Failed to complete stale event %d: %v", oldEvent.ID, err)
+			} else {
+				log.Printf("  ✅ Successfully completed stale event %d (points awarded)", oldEvent.ID)
+				
+				// Update overall leaderboard after completion
+				if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, oldEvent.GuildID, oldEvent.Type); err != nil {
+					log.Printf("  ⚠️  Failed to update overall leaderboard: %v", err)
+				}
+			}
+		}
+	}
 }
 
 func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
@@ -104,17 +163,31 @@ func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
 			}
 		}
 
-		// Start new event BEFORE completing the old one
-		// This ensures if rollover fails, the old event stays active and will be retried
-		rolloverResult, err := s.eventService.AutoRollover(ctx, event.GuildID, event.Type, event.EndTime)
-		if err != nil {
-			log.Printf("CRITICAL: Failed to auto-rollover %s event %d (Guild: %s): %v - will retry on next check", event.Type, event.ID, event.GuildID, err)
-			continue
+		// STEP 1: Fully complete the old event (points + overall leaderboard + deactivate)
+		// This ensures all points are calculated BEFORE the new event is created
+		if err := s.snapshotService.CalculateAndAwardPoints(ctx, event); err != nil {
+			log.Printf("CRITICAL: Failed to calculate points for event %d: %v - skipping rollover", event.ID, err)
+			continue // Don't create new event if we can't complete old one
 		}
 
-		// Complete event only after rollover succeeds (snapshots already updated, just calculate points and deactivate)
-		if err := s.eventService.CompleteEventWithoutSnapshotUpdate(ctx, event); err != nil {
-			log.Printf("Failed to complete event %d after successful rollover: %v - old event remains active", event.ID, err)
+		// Update overall leaderboard with completed event points
+		if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, event.GuildID, event.Type); err != nil {
+			log.Printf("Failed to update overall leaderboard for completed event: %v", err)
+			// Continue anyway - points are calculated
+		}
+
+		// Deactivate the old event
+		if err := s.store.DeactivateEvent(ctx, event.ID); err != nil {
+			log.Printf("CRITICAL: Failed to deactivate event %d: %v - skipping rollover", event.ID, err)
+			continue // Don't create new event if we can't deactivate old one
+		}
+
+		log.Printf("✅ Event %d fully completed (points awarded, leaderboard updated, deactivated)", event.ID)
+
+		// STEP 2: Now create the new event (old one is fully completed and deactivated)
+		rolloverResult, err := s.eventService.StartNewEvent(ctx, event.GuildID, event.Type, event.EndTime)
+		if err != nil {
+			log.Printf("CRITICAL: Failed to start new %s event for Guild %s: %v - will retry on next check", event.Type, event.GuildID, err)
 			continue
 		}
 

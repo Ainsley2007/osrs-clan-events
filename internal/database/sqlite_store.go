@@ -150,6 +150,17 @@ func (s *SQLiteStore) init() error {
 		}
 	}
 
+	// Add unique partial index to prevent multiple active events of same type per guild
+	// This is a safety mechanism to prevent the rollover bug from creating duplicate active events
+	indexQuery := `CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_event 
+		ON events(guild_id, type, is_active) 
+		WHERE is_active = 1;`
+	if _, err := s.db.Exec(indexQuery); err != nil {
+		log.Printf("Warning: failed to create unique active event index: %v", err)
+		// Don't fail initialization - this is a safety measure, not critical
+		// Existing databases with duplicate active events will need manual cleanup first
+	}
+
 	return nil
 }
 

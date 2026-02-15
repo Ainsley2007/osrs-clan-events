@@ -15,12 +15,13 @@ type Store interface {
 	GetExpiringEvents(ctx context.Context) ([]*database.Event, error)
 	GetAllActiveEvents(ctx context.Context) ([]*database.Event, error)
 	GetGuild(ctx context.Context, guildID string) (*database.Guild, error)
+	DeactivateEvent(ctx context.Context, eventID int64) error
 }
 
 type EventService interface {
 	CompleteEvent(ctx context.Context, event *database.Event) error
 	CompleteEventWithoutSnapshotUpdate(ctx context.Context, event *database.Event) error
-	AutoRollover(ctx context.Context, guildID string, eventType string, startTime time.Time) (*services.StartEventResult, error)
+	StartNewEvent(ctx context.Context, guildID string, eventType string, startTime time.Time) (*services.StartEventResult, error)
 }
 
 type SnapshotService interface {
@@ -28,6 +29,7 @@ type SnapshotService interface {
 	UpdateSnapshotsForEvents(ctx context.Context, events []*database.Event) ([]services.FailedAccountUpdate, error)
 	UpdateSnapshotsForEventsWithResult(ctx context.Context, events []*database.Event) (*services.UpdateSnapshotsForEventsResult, error)
 	CreateInitialSnapshots(ctx context.Context, eventID int64, guildID, metricName, metricType string) (int, error)
+	CalculateAndAwardPoints(ctx context.Context, event *database.Event) error
 }
 
 type LeaderboardService interface {

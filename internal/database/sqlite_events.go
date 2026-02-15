@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 )
 
 // Events
@@ -42,17 +43,24 @@ func (s *SQLiteStore) GetEvent(ctx context.Context, id int64) (*Event, error) {
 }
 
 func (s *SQLiteStore) GetActiveEvent(ctx context.Context, guildID string, eventType string) (*Event, error) {
-	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
-		FROM events WHERE guild_id = ? AND type = ? AND is_active = 1 ORDER BY start_time DESC LIMIT 1`
-
-	var e Event
-	err := s.db.QueryRowContext(ctx, query, guildID, eventType).Scan(
-		&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.BossesToTrack, &e.StartTime, &e.EndTime, &e.IsActive, &e.PointsPerKC, &e.PointsPerXP, &e.ThresholdKC, &e.XPThreshold,
-	)
-	if err == sql.ErrNoRows {
+	// Use GetActiveEvents to check for duplicates (safety check)
+	events, err := s.GetActiveEvents(ctx, guildID, eventType)
+	if err != nil {
+		return nil, err
+	}
+	
+	if len(events) == 0 {
 		return nil, fmt.Errorf("no active event found")
 	}
-	return &e, err
+	
+	// Safeguard: Warn if multiple active events exist (should be prevented by unique index)
+	if len(events) > 1 {
+		log.Printf("⚠️  WARNING: Found %d active %s events for guild %s (should be impossible with unique index). Returning newest.", 
+			len(events), eventType, guildID)
+		// Return the newest one (already sorted by start_time DESC)
+	}
+	
+	return events[0], nil
 }
 
 func (s *SQLiteStore) GetActiveEvents(ctx context.Context, guildID string, eventType string) ([]*Event, error) {
