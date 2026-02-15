@@ -49,40 +49,63 @@ func (b *Bot) runStatsAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 		return
 	}
 
-	// Build message
-	var message strings.Builder
-	message.WriteString("📊 **Your Event Statistics**\n\n")
-
-	if len(botwStats) > 0 {
-		message.WriteString("**BOTW Events**\n")
-		for _, eventStat := range botwStats {
-			message.WriteString(fmt.Sprintf("• %s (Week %d):\n", eventStat.MetricName, eventStat.WeekNumber))
-			for _, accountStat := range eventStat.AccountStats {
-				message.WriteString(fmt.Sprintf("  - `%s`: %s KC\n", accountStat.RSN, formatNumber(accountStat.Gain)))
-			}
-			message.WriteString(fmt.Sprintf("  **Points**: %d\n", eventStat.Points))
-		}
-		message.WriteString("\n")
-	}
-
-	if len(sotwStats) > 0 {
-		message.WriteString("**SOTW Events**\n")
-		for _, eventStat := range sotwStats {
-			message.WriteString(fmt.Sprintf("• %s (Week %d):\n", eventStat.MetricName, eventStat.WeekNumber))
-			for _, accountStat := range eventStat.AccountStats {
-				message.WriteString(fmt.Sprintf("  - `%s`: %s XP\n", accountStat.RSN, formatNumber(accountStat.Gain)))
-			}
-			message.WriteString(fmt.Sprintf("  **Points**: %d\n", eventStat.Points))
-		}
-	}
-
 	if len(botwStats) == 0 && len(sotwStats) == 0 {
-		message.WriteString("No events found for this guild or no progress yet.")
+		content := "No events found for this guild or no progress yet."
+		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &content,
+		})
+		return
 	}
 
-	content := message.String()
+	// Build embeds
+	var embeds []*discordgo.MessageEmbed
+
+	// BOTW Events embed
+	if len(botwStats) > 0 {
+		for _, eventStat := range botwStats {
+			var description strings.Builder
+			description.WriteString("```\n")
+			for _, accountStat := range eventStat.AccountStats {
+				description.WriteString(fmt.Sprintf("%-20s %10s KC\n", accountStat.RSN, formatNumber(accountStat.Gain)))
+			}
+			description.WriteString("```")
+
+			embed := &discordgo.MessageEmbed{
+				Title:       fmt.Sprintf("🗡️ BOTW - %s (Week %d)", eventStat.MetricName, eventStat.WeekNumber),
+				Description: description.String(),
+				Color:       0xFF6B6B, // Red
+				Footer: &discordgo.MessageEmbedFooter{
+					Text: fmt.Sprintf("Points: %d", eventStat.Points),
+				},
+			}
+			embeds = append(embeds, embed)
+		}
+	}
+
+	// SOTW Events embed
+	if len(sotwStats) > 0 {
+		for _, eventStat := range sotwStats {
+			var description strings.Builder
+			description.WriteString("```\n")
+			for _, accountStat := range eventStat.AccountStats {
+				description.WriteString(fmt.Sprintf("%-20s %10s XP\n", accountStat.RSN, formatNumber(accountStat.Gain)))
+			}
+			description.WriteString("```")
+
+			embed := &discordgo.MessageEmbed{
+				Title:       fmt.Sprintf("⚔️ SOTW - %s (Week %d)", eventStat.MetricName, eventStat.WeekNumber),
+				Description: description.String(),
+				Color:       0x4ECDC4, // Teal
+				Footer: &discordgo.MessageEmbedFooter{
+					Text: fmt.Sprintf("Points: %d", eventStat.Points),
+				},
+			}
+			embeds = append(embeds, embed)
+		}
+	}
+
 	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Content: &content,
+		Embeds: &embeds,
 	}); err != nil {
 		log.Printf("Failed to edit stats response: %v", err)
 	}

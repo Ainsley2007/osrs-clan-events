@@ -71,6 +71,7 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 	bot.Session.AddHandler(bot.ready)
 	bot.Session.AddHandler(bot.interactionCreate)
 	bot.Session.AddHandler(bot.guildCreate)
+	bot.Session.AddHandler(bot.guildDelete)
 
 	return bot, nil
 }

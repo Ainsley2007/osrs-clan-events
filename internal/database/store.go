@@ -97,6 +97,7 @@ type Store interface {
 	// Guilds
 	SaveGuild(ctx context.Context, guild *Guild) error
 	GetGuild(ctx context.Context, guildID string) (*Guild, error)
+	DeleteGuild(ctx context.Context, guildID string) error
 
 	// Participants
 	SaveParticipant(ctx context.Context, p *Participant) error

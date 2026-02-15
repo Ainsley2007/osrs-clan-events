@@ -56,3 +56,10 @@ func (s *SQLiteStore) GetGuild(ctx context.Context, guildID string) (*Guild, err
 	}
 	return &g, err
 }
+
+func (s *SQLiteStore) DeleteGuild(ctx context.Context, guildID string) error {
+	query := `DELETE FROM guilds WHERE guild_id = ?`
+	_, err := s.db.ExecContext(ctx, query, guildID)
+	return err
+}
+
