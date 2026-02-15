@@ -113,21 +113,28 @@ func (s *Scheduler) cleanupStaleActiveEvents(ctx context.Context) {
 		})
 
 		// Keep the newest, properly complete all others (calculate points, then deactivate)
+		// Do NOT start new events - if duplicates exist, a newer event already exists
 		for i := 1; i < len(events); i++ {
 			oldEvent := events[i]
 			log.Printf("  ⚠️  Completing stale active event ID %d (week %d, started %s)", 
 				oldEvent.ID, oldEvent.WeekNumber, oldEvent.StartTime.Format("2006-01-02 15:04"))
 			
-			// Properly complete the event (calculates and awards points)
-			if err := s.eventService.CompleteEvent(ctx, oldEvent); err != nil {
-				log.Printf("  ❌ Failed to complete stale event %d: %v", oldEvent.ID, err)
+			// Calculate and award points (do NOT start a new event)
+			if err := s.snapshotService.CalculateAndAwardPoints(ctx, oldEvent); err != nil {
+				log.Printf("  ❌ Failed to calculate points for stale event %d: %v", oldEvent.ID, err)
+				continue
+			}
+			
+			// Update overall leaderboard
+			if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, oldEvent.GuildID, oldEvent.Type); err != nil {
+				log.Printf("  ⚠️  Failed to update overall leaderboard: %v", err)
+			}
+			
+			// Deactivate the event
+			if err := s.store.DeactivateEvent(ctx, oldEvent.ID); err != nil {
+				log.Printf("  ❌ Failed to deactivate stale event %d: %v", oldEvent.ID, err)
 			} else {
-				log.Printf("  ✅ Successfully completed stale event %d (points awarded)", oldEvent.ID)
-				
-				// Update overall leaderboard after completion
-				if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, oldEvent.GuildID, oldEvent.Type); err != nil {
-					log.Printf("  ⚠️  Failed to update overall leaderboard: %v", err)
-				}
+				log.Printf("  ✅ Successfully completed stale event %d (points awarded, deactivated)", oldEvent.ID)
 			}
 		}
 	}

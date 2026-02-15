@@ -22,6 +22,7 @@ func (b *Bot) setupCommands() {
 	b.registerCommand(b.setupDonationChannelCommand())
 	b.registerCommand(b.addDonationCommand())
 	b.registerCommand(b.useFundsCommand())
+	b.registerCommand(b.statsCommand())
 }
 
 func (b *Bot) registerCommand(cmd Command) {
