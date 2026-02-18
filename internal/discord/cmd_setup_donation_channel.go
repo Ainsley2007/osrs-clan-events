@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
@@ -32,7 +31,8 @@ func (b *Bot) setupDonationChannelCommand() Command {
 				return
 			}
 
-			ctx := context.Background()
+			ctx, cancel := cmdContext()
+			defer cancel()
 			data := i.ApplicationCommandData()
 
 			var channelID string
@@ -55,7 +55,6 @@ func (b *Bot) setupDonationChannelCommand() Command {
 				return
 			}
 
-			// Create initial leaderboard message
 			if err := b.DonationService.CreateOrUpdateLeaderboard(ctx, guildID); err != nil {
 				respondError(s, i.Interaction, fmt.Errorf("failed to create leaderboard: %w", err))
 				return

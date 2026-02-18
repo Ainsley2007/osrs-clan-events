@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"log"
 	"sync"
 
@@ -142,7 +141,8 @@ func (b *Bot) handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionC
 }
 
 func (b *Bot) handleRSNAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	ctx := context.Background()
+	ctx, cancel := cmdContext()
+	defer cancel()
 
 	userID := i.Member.User.ID
 	if userID == "" && i.User != nil {
@@ -200,7 +200,8 @@ func (b *Bot) initializeGuildAsync(guildID string) {
 		b.mu.Unlock()
 	}()
 
-	ctx := context.Background()
+	ctx, cancel := cmdContext()
+	defer cancel()
 	if err := b.InitializerService.InitializeGuild(ctx, guildID); err != nil {
 		log.Printf("Failed to initialize guild %s: %v", guildID, err)
 	}

@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"fmt"
 	"log"
 
@@ -56,9 +55,10 @@ func (b *Bot) removeCommand() Command {
 				return
 			}
 
-			go func() {
-				ctx := context.Background()
-				if err := b.AccountService.RemoveAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
+		go func() {
+			ctx, cancel := cmdContext()
+			defer cancel()
+			if err := b.AccountService.RemoveAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to remove account: %v", err))
 					return
 				}

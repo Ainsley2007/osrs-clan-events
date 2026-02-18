@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -38,7 +39,6 @@ func (s *AccountService) AddAccount(ctx context.Context, discordUserID, guildID,
 
 	existing, err := s.store.GetAccountByRSN(ctx, rsn, discordUserID)
 	if err == nil && existing != nil {
-		// Account already exists; ensure participant in this guild and create snapshots for this guild's events
 		_, err := s.store.GetParticipant(ctx, discordUserID, guildID)
 		if err != nil {
 			participant := &database.Participant{
@@ -89,7 +89,6 @@ func (s *AccountService) AddAccount(ctx context.Context, discordUserID, guildID,
 }
 
 func (s *AccountService) createSnapshotsForActiveEvents(ctx context.Context, account *database.Account, guildID string) error {
-	// Get all active events for this guild
 	botwEvent, err := s.store.GetActiveEvent(ctx, guildID, "botw")
 	if err != nil {
 		if !isNoActiveEventErr(err) {
@@ -106,11 +105,9 @@ func (s *AccountService) createSnapshotsForActiveEvents(ctx context.Context, acc
 		sotwEvent = nil
 	}
 
-	// Use UTC for all time comparisons
 	now := time.Now().UTC()
 	var eventsToCreate []*database.Event
 
-	// Collect events that are active and have started
 	if botwEvent != nil {
 		eventStartUTC := botwEvent.StartTime.UTC()
 		if eventStartUTC.Before(now) || eventStartUTC.Equal(now) {
@@ -139,7 +136,6 @@ func (s *AccountService) createSnapshotsForActiveEvents(ctx context.Context, acc
 	}
 	s.logger.Printf("Account %s: creating snapshots for %s", account.RSN, strings.Join(parts, ", "))
 
-	// Create snapshots for all events efficiently (fetch stats once)
 	if err := s.snapshotService.CreateSnapshotsForAccount(ctx, eventsToCreate, account); err != nil {
 		return fmt.Errorf("failed to create snapshots: %w", err)
 	}
@@ -162,7 +158,6 @@ func (s *AccountService) RemoveAccount(ctx context.Context, discordUserID, guild
 		return fmt.Errorf("failed to remove account: %w", err)
 	}
 
-	// Update leaderboards after account removal
 	s.leaderboardService.RefreshLeaderboards(ctx, guildID)
 
 	return nil
@@ -185,13 +180,9 @@ func (s *AccountService) RenameAccount(ctx context.Context, discordUserID, guild
 		return fmt.Errorf("failed to rename account: %w", err)
 	}
 
-	// Update account RSN in memory for snapshot creation
 	account.RSN = newRSN
 
-	// Create snapshots for active events with the new RSN
-	// This will update existing snapshots or create new ones if needed
 	if err := s.createSnapshotsForActiveEvents(ctx, account, guildID); err != nil {
-		// Log error but don't fail rename - snapshots can be updated later
 		s.logger.Printf("Warning: failed to create snapshots after rename: %v", err)
 	}
 
@@ -223,12 +214,11 @@ func (s *AccountService) ExitCompetition(ctx context.Context, discordUserID, gui
 		return fmt.Errorf("failed to exit competition: %w", err)
 	}
 
-	// Update leaderboards after exiting competition
 	s.leaderboardService.RefreshLeaderboards(ctx, guildID)
 
 	return nil
 }
 
 func isNoActiveEventErr(err error) bool {
-	return err != nil && err.Error() == "no active event found"
+	return errors.Is(err, database.ErrNoActiveEvent)
 }

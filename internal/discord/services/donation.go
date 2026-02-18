@@ -60,7 +60,6 @@ func (s *DonationService) UseFunds(ctx context.Context, guildID string, amountGP
 		return fmt.Errorf("amount must be positive")
 	}
 
-	// Check available funds
 	summary, err := s.GetFundsSummary(ctx, guildID)
 	if err != nil {
 		return fmt.Errorf("failed to get funds summary: %w", err)
@@ -110,13 +109,12 @@ func (s *DonationService) GetDonationLeaderboard(ctx context.Context, guildID st
 		return nil, fmt.Errorf("failed to get donations: %w", err)
 	}
 
-	// Aggregate by user
 	userTotals := make(map[string]int64)
 	for _, d := range donations {
 		userTotals[d.DiscordUserID] += d.Amount
 	}
 
-	var entries []DonationLeaderboardEntry
+	entries := make([]DonationLeaderboardEntry, 0, len(userTotals))
 	for userID, total := range userTotals {
 		if total <= 0 {
 			continue
@@ -135,7 +133,6 @@ func (s *DonationService) GetDonationLeaderboard(ctx context.Context, guildID st
 		})
 	}
 
-	// Sort by total amount descending
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].TotalAmount != entries[j].TotalAmount {
 			return entries[i].TotalAmount > entries[j].TotalAmount
@@ -143,7 +140,6 @@ func (s *DonationService) GetDonationLeaderboard(ctx context.Context, guildID st
 		return entries[i].DiscordName < entries[j].DiscordName
 	})
 
-	// Assign ranks
 	currentRank := 1
 	for i := range entries {
 		if i > 0 && entries[i].TotalAmount != entries[i-1].TotalAmount {
@@ -171,7 +167,6 @@ func (s *DonationService) CreateOrUpdateLeaderboard(ctx context.Context, guildID
 	}
 
 	if guild.DonationMsgID == "" {
-		// Create new message
 		msg, err := s.session.ChannelMessageSendEmbed(guild.DonationChannelID, embed)
 		if err != nil {
 			return fmt.Errorf("failed to create leaderboard message: %w", err)
@@ -180,7 +175,6 @@ func (s *DonationService) CreateOrUpdateLeaderboard(ctx context.Context, guildID
 			return fmt.Errorf("failed to save message ID: %w", err)
 		}
 	} else {
-		// Update existing message
 		_, err = s.session.ChannelMessageEditEmbed(guild.DonationChannelID, guild.DonationMsgID, embed)
 		if err != nil {
 			return fmt.Errorf("failed to update leaderboard message: %w", err)

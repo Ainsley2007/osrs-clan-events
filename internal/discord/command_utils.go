@@ -1,12 +1,20 @@
 package discord
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
+
+const cmdTimeout = 30 * time.Second
+
+func cmdContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), cmdTimeout)
+}
 
 func ptr[T any](v T) *T { return &v }
 

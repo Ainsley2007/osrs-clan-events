@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"fmt"
 	"log"
 
@@ -55,9 +54,10 @@ func (b *Bot) addAccountCommand() Command {
 				return
 			}
 
-			go func() {
-				ctx := context.Background()
-				result, err := b.AccountService.AddAccount(ctx, targetUser, i.GuildID, rsn)
+		go func() {
+			ctx, cancel := cmdContext()
+			defer cancel()
+			result, err := b.AccountService.AddAccount(ctx, targetUser, i.GuildID, rsn)
 				if err != nil {
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to add account: %v", err))
 					return

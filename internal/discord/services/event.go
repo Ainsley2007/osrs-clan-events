@@ -3,24 +3,24 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"osrs-events/internal/database"
-	"osrs-events/internal/firebase"
 )
 
 type EventService struct {
 	store           EventStore
-	snapshotService *SnapshotService
-	firebaseClient  *firebase.RemoteConfigClient
+	snapshotService SnapshotManager
+	configProvider  EventConfigProvider
 }
 
-func NewEventService(store EventStore, snapshotService *SnapshotService, firebaseClient *firebase.RemoteConfigClient) *EventService {
+func NewEventService(store EventStore, snapshotService SnapshotManager, configProvider EventConfigProvider) *EventService {
 	return &EventService{
 		store:           store,
 		snapshotService: snapshotService,
-		firebaseClient:  firebaseClient,
+		configProvider:  configProvider,
 	}
 }
 
@@ -48,7 +48,7 @@ func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime 
 	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "botw"); err == nil && len(events) > 0 {
 		previousBoss = events[0].MetricJsonID
 	}
-	bossConfig, err := s.firebaseClient.GetRandomBoss(ctx, previousBoss)
+	bossConfig, err := s.configProvider.GetRandomBoss(ctx, previousBoss)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch random boss: %w", err)
 	}
@@ -78,17 +78,9 @@ func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime 
 		return nil, fmt.Errorf("failed to create event: %w", err)
 	}
 
-	// Create snapshots immediately if event has started (start time is now or in the past)
-	// During rollover, the new event starts at the old event's end time, so snapshots are created immediately
-	var snapshotResult *InitialSnapshotResult
-	nowUTC := time.Now().UTC()
-	startTimeUTC := startTime.UTC()
-	if !startTimeUTC.After(nowUTC) {
-		result, err := s.snapshotService.CreateInitialSnapshotsWithResult(ctx, event.ID, guildID, bossConfig.Name, "boss")
-		if err != nil {
-			return nil, fmt.Errorf("failed to create initial snapshots: %w", err)
-		}
-		snapshotResult = result
+	snapshotResult, err := s.createSnapshotsIfStarted(ctx, event, startTime, bossConfig.Name, "boss")
+	if err != nil {
+		return nil, err
 	}
 
 	return &StartEventResult{
@@ -116,7 +108,7 @@ func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime 
 	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "sotw"); err == nil && len(events) > 0 {
 		previousSkill = events[0].MetricJsonID
 	}
-	skillConfig, err := s.firebaseClient.GetRandomSkill(ctx, previousSkill)
+	skillConfig, err := s.configProvider.GetRandomSkill(ctx, previousSkill)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch random skill: %w", err)
 	}
@@ -140,17 +132,9 @@ func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime 
 		return nil, fmt.Errorf("failed to create event: %w", err)
 	}
 
-	// Create snapshots immediately if event has started (start time is now or in the past)
-	// During rollover, the new event starts at the old event's end time, so snapshots are created immediately
-	var snapshotResult *InitialSnapshotResult
-	nowUTC := time.Now().UTC()
-	startTimeUTC := startTime.UTC()
-	if !startTimeUTC.After(nowUTC) {
-		result, err := s.snapshotService.CreateInitialSnapshotsWithResult(ctx, event.ID, guildID, skillConfig.Name, "skill")
-		if err != nil {
-			return nil, fmt.Errorf("failed to create initial snapshots: %w", err)
-		}
-		snapshotResult = result
+	snapshotResult, err := s.createSnapshotsIfStarted(ctx, event, startTime, skillConfig.Name, "skill")
+	if err != nil {
+		return nil, err
 	}
 
 	return &StartEventResult{
@@ -160,10 +144,23 @@ func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime 
 	}, nil
 }
 
+// createSnapshotsIfStarted creates initial snapshots when the event's start time is now or in the past.
+// During rollover the new event starts at the old event's end time, so this fires immediately.
+func (s *EventService) createSnapshotsIfStarted(ctx context.Context, event *database.Event, startTime time.Time, metricName, metricType string) (*InitialSnapshotResult, error) {
+	if startTime.UTC().After(time.Now().UTC()) {
+		return nil, nil
+	}
+	result, err := s.snapshotService.CreateInitialSnapshotsWithResult(ctx, event.ID, event.GuildID, metricName, metricType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create initial snapshots: %w", err)
+	}
+	return result, nil
+}
+
 func (s *EventService) IsEventRunning(ctx context.Context, guildID, eventType string) (bool, error) {
 	event, err := s.store.GetActiveEvent(ctx, guildID, eventType)
 	if err != nil {
-		if err.Error() == "no active event found" {
+		if errors.Is(err, database.ErrNoActiveEvent) {
 			return false, nil
 		}
 		return false, err
@@ -184,7 +181,6 @@ func (s *EventService) GetActiveEvent(ctx context.Context, guildID, eventType st
 }
 
 func (s *EventService) GetNextWeekNumber(ctx context.Context, guildID, eventType string) (int, error) {
-	// Get ALL events (active and inactive) to find the maximum week number
 	events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, eventType)
 	if err != nil {
 		return 1, nil
@@ -201,7 +197,6 @@ func (s *EventService) GetNextWeekNumber(ctx context.Context, guildID, eventType
 }
 
 func (s *EventService) CompleteEvent(ctx context.Context, event *database.Event) error {
-	// Final snapshot update at event end time (handled by GetExpiringEvents query)
 	_, err := s.snapshotService.UpdateSnapshotsForEvent(ctx, event)
 	if err != nil {
 		return fmt.Errorf("failed to update final snapshots: %w", err)

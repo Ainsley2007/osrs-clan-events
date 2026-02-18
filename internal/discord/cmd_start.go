@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -43,7 +42,8 @@ func (b *Bot) handleStart(s *discordgo.Session, i *discordgo.InteractionCreate) 
 }
 
 func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	ctx := context.Background()
+	ctx, cancel := cmdContext()
+	defer cancel()
 
 	activeBotwEvents, err := b.Store.GetActiveEvents(ctx, i.GuildID, "botw")
 	if err == nil && len(activeBotwEvents) > 0 {
@@ -91,7 +91,6 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 
 	}
 
-	// Edit deferred reply with simple success message
 	content := "✅ Weekly competitions started successfully!"
 	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content}); err != nil {
 		log.Printf("Failed to edit deferred start response: %v", err)

@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -44,7 +43,8 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := cmdContext()
+	defer cancel()
 	data := i.ApplicationCommandData()
 
 	var amountM float64
@@ -64,7 +64,6 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	// Check if donation channel is set
 	guild, err := b.Store.GetGuild(ctx, i.GuildID)
 	if err != nil || guild.DonationChannelID == "" {
 		respondError(s, i.Interaction, errors.New("donation channel not configured. Use /setup-donation-channel first"))
@@ -83,13 +82,11 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Used `%s` from clan fund%s.", formatAmountM(amountGP), descText))
 
-	// Update leaderboard
 	if err := b.DonationService.UpdateLeaderboard(ctx, i.GuildID); err != nil {
 		// Log error but don't fail the command
 		b.logger.Printf("Failed to update donation leaderboard: %v", err)
 	}
 
-	// Log to logging channel
 	logMsg := fmt.Sprintf("➖ <@%s> used `%s` from clan fund%s.", i.Member.User.ID, formatAmountM(amountGP), descText)
 	b.logAction(ctx, i.GuildID, logMsg)
 }

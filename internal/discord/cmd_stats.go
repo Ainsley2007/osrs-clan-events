@@ -21,7 +21,6 @@ func (b *Bot) statsCommand() Command {
 }
 
 func (b *Bot) handleStats(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Defer immediately
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -42,7 +41,6 @@ func (b *Bot) runStatsAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 	userID := i.Member.User.ID
 	guildID := i.GuildID
 
-	// Get stats from service
 	botwStats, sotwStats, err := b.StatsService.GetUserEventStats(ctx, userID, guildID)
 	if err != nil {
 		editDeferredWithError(s, i.Interaction, err)
@@ -57,10 +55,8 @@ func (b *Bot) runStatsAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 		return
 	}
 
-	// Build embeds
 	var embeds []*discordgo.MessageEmbed
 
-	// BOTW Events embed
 	if len(botwStats) > 0 {
 		for _, eventStat := range botwStats {
 			var description strings.Builder
@@ -82,7 +78,6 @@ func (b *Bot) runStatsAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 		}
 	}
 
-	// SOTW Events embed
 	if len(sotwStats) > 0 {
 		for _, eventStat := range sotwStats {
 			var description strings.Builder

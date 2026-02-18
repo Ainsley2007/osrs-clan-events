@@ -8,10 +8,10 @@ import (
 )
 
 type GuildService struct {
-	store database.Store
+	store GuildStore
 }
 
-func NewGuildService(store database.Store) *GuildService {
+func NewGuildService(store GuildStore) *GuildService {
 	return &GuildService{store: store}
 }
 

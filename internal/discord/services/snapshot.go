@@ -58,7 +58,6 @@ func (s *SnapshotService) CreateInitialSnapshotsWithResult(ctx context.Context, 
 	var failedRSNs []string
 	successCount := 0
 
-	// Fetch stats once per account and create snapshot
 	for _, account := range accounts {
 		stats, err := s.osrsClient.GetPlayerStats(ctx, account.RSN)
 		if err != nil {
@@ -99,14 +98,11 @@ func (s *SnapshotService) CreateInitialSnapshotsWithResult(ctx context.Context, 
 }
 
 func (s *SnapshotService) CreateSnapshotForAccount(ctx context.Context, event *database.Event, account *database.Account) error {
-	// Check if snapshot already exists for this account and event
 	existingSnapshot, err := s.store.GetSnapshot(ctx, event.ID, account.ID)
 	if err == nil && existingSnapshot != nil {
-		// Snapshot already exists, update it with new RSN's stats
 		return s.UpdateSnapshotForAccount(ctx, event, account, existingSnapshot)
 	}
 
-	// Fetch current metric value for this account
 	value, err := s.fetchMetricValueForEvent(ctx, account.RSN, event)
 	if err != nil {
 		return fmt.Errorf("failed to fetch stats for %s: %w", account.RSN, err)
@@ -126,24 +122,20 @@ func (s *SnapshotService) CreateSnapshotForAccount(ctx context.Context, event *d
 	return nil
 }
 
-// CreateSnapshotsForAccount creates snapshots for multiple events efficiently by fetching stats once
+// CreateSnapshotsForAccount creates snapshots for multiple events by fetching stats once.
 func (s *SnapshotService) CreateSnapshotsForAccount(ctx context.Context, events []*database.Event, account *database.Account) error {
 	if len(events) == 0 {
 		return nil
 	}
 
-	// Fetch player stats once for this account
 	stats, err := s.osrsClient.GetPlayerStats(ctx, account.RSN)
 	if err != nil {
 		return fmt.Errorf("failed to fetch stats for %s: %w", account.RSN, err)
 	}
 
-	// Create snapshots for all events using the cached stats
 	for _, event := range events {
-		// Check if snapshot already exists
 		existingSnapshot, err := s.store.GetSnapshot(ctx, event.ID, account.ID)
 		if err == nil && existingSnapshot != nil {
-			// Snapshot exists, update it
 			currentValue, err := s.extractMetricValueFromStats(stats, event)
 			if err != nil {
 				return fmt.Errorf("failed to extract metric for event %d: %w", event.ID, err)
@@ -154,7 +146,6 @@ func (s *SnapshotService) CreateSnapshotsForAccount(ctx context.Context, events 
 			continue
 		}
 
-		// Extract metric value from cached stats
 		value, err := s.extractMetricValueFromStats(stats, event)
 		if err != nil {
 			return fmt.Errorf("failed to extract metric for event %d: %w", event.ID, err)
@@ -176,13 +167,11 @@ func (s *SnapshotService) CreateSnapshotsForAccount(ctx context.Context, events 
 }
 
 func (s *SnapshotService) UpdateSnapshotForAccount(ctx context.Context, event *database.Event, account *database.Account, snapshot *database.Snapshot) error {
-	// Fetch current metric value with the new RSN
 	currentValue, err := s.fetchMetricValueForEvent(ctx, account.RSN, event)
 	if err != nil {
 		return fmt.Errorf("failed to fetch stats for %s: %w", account.RSN, err)
 	}
 
-	// Update the snapshot's current value
 	if err := s.store.UpdateSnapshotCurrentValue(ctx, snapshot.ID, currentValue); err != nil {
 		return fmt.Errorf("failed to update snapshot for %s: %w", account.RSN, err)
 	}
@@ -190,24 +179,20 @@ func (s *SnapshotService) UpdateSnapshotForAccount(ctx context.Context, event *d
 	return nil
 }
 
-// UpdateSnapshotsForAccount updates snapshots for multiple events for a single account efficiently
+// UpdateSnapshotsForAccount updates snapshots for multiple events for a single account by fetching stats once.
 func (s *SnapshotService) UpdateSnapshotsForAccount(ctx context.Context, events []*database.Event, account *database.Account) error {
 	if len(events) == 0 {
 		return nil
 	}
 
-	// Fetch player stats once for this account
 	stats, err := s.osrsClient.GetPlayerStats(ctx, account.RSN)
 	if err != nil {
 		return fmt.Errorf("failed to fetch stats for %s: %w", account.RSN, err)
 	}
 
-	// Update all snapshots using the cached stats
 	for _, event := range events {
-		// Get existing snapshot
 		snapshot, err := s.store.GetSnapshot(ctx, event.ID, account.ID)
 		if err != nil {
-			// Snapshot doesn't exist, create it
 			value, err := s.extractMetricValueFromStats(stats, event)
 			if err != nil {
 				return fmt.Errorf("failed to extract metric for event %d: %w", event.ID, err)
@@ -226,13 +211,11 @@ func (s *SnapshotService) UpdateSnapshotsForAccount(ctx context.Context, events 
 			continue
 		}
 
-		// Extract metric value from cached stats
 		currentValue, err := s.extractMetricValueFromStats(stats, event)
 		if err != nil {
 			return fmt.Errorf("failed to extract metric for event %d: %w", event.ID, err)
 		}
 
-		// Update the snapshot's current value
 		if err := s.store.UpdateSnapshotCurrentValue(ctx, snapshot.ID, currentValue); err != nil {
 			return fmt.Errorf("failed to update snapshot for %s: %w", account.RSN, err)
 		}
@@ -582,7 +565,7 @@ func (s *SnapshotService) CalculateAndAwardPoints(ctx context.Context, event *da
 		}
 	}
 
-	var updates []*database.ParticipantPointUpdate
+	updates := make([]*database.ParticipantPointUpdate, 0, len(pointUpdates))
 	for _, update := range pointUpdates {
 		updates = append(updates, update)
 	}

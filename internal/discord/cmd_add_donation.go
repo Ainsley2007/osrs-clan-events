@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -44,7 +43,8 @@ func (b *Bot) handleAddDonation(s *discordgo.Session, i *discordgo.InteractionCr
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := cmdContext()
+	defer cancel()
 	data := i.ApplicationCommandData()
 
 	var targetUserID string
@@ -84,13 +84,11 @@ func (b *Bot) handleAddDonation(s *discordgo.Session, i *discordgo.InteractionCr
 
 	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Added `%s` to clan fund from <@%s>.", formatAmountM(amountGP), targetUserID))
 
-	// Update leaderboard
 	if err := b.DonationService.UpdateLeaderboard(ctx, i.GuildID); err != nil {
 		// Log error but don't fail the command
 		b.logger.Printf("Failed to update donation leaderboard: %v", err)
 	}
 
-	// Log to logging channel
 	logMsg := fmt.Sprintf("➕ <@%s> added `%s` to clan fund from <@%s>.", i.Member.User.ID, formatAmountM(amountGP), targetUserID)
 	b.logAction(ctx, i.GuildID, logMsg)
 }

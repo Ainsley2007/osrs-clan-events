@@ -50,7 +50,7 @@ func (s *SQLiteStore) GetActiveEvent(ctx context.Context, guildID string, eventT
 	}
 	
 	if len(events) == 0 {
-		return nil, fmt.Errorf("no active event found")
+		return nil, ErrNoActiveEvent
 	}
 	
 	// Safeguard: Warn if multiple active events exist (should be prevented by unique index)

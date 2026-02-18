@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -74,7 +73,8 @@ func (b *Bot) handleAddPoints(s *discordgo.Session, i *discordgo.InteractionCrea
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := cmdContext()
+	defer cancel()
 	err := b.ParticipantService.AddPoints(ctx, i.GuildID, targetUserID, eventType, amount)
 	if err != nil {
 		if errors.Is(err, services.ErrParticipantNotFound) {
@@ -91,7 +91,6 @@ func (b *Bot) handleAddPoints(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Added %s %s points to <@%s>.", formatPoints(int64(amount)), label, targetUserID))
 
-	// Refresh overall leaderboards so the new points are reflected
 	b.LeaderboardService.RefreshLeaderboards(ctx, i.GuildID)
 
 	logMsg := fmt.Sprintf("➕ <@%s> added %s %s points to <@%s>.", i.Member.User.ID, formatPoints(int64(amount)), label, targetUserID)

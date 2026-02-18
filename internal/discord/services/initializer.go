@@ -13,11 +13,11 @@ import (
 
 type InitializerService struct {
 	session            *discordgo.Session
-	store              database.Store
+	store              InitializerStore
 	leaderboardService *LeaderboardService
 }
 
-func NewInitializerService(session *discordgo.Session, store database.Store, leaderboardService *LeaderboardService) *InitializerService {
+func NewInitializerService(session *discordgo.Session, store InitializerStore, leaderboardService *LeaderboardService) *InitializerService {
 	return &InitializerService{
 		session:            session,
 		store:              store,
@@ -61,11 +61,7 @@ func (s *InitializerService) InitializeGuild(ctx context.Context, guildID string
 		}
 	}
 
-	// Refresh all leaderboards after ensuring messages exist
-	if err := s.refreshLeaderboards(ctx, guildID); err != nil {
-		log.Printf("[Guild %s] Failed to refresh leaderboards: %v", guildID, err)
-		// Don't fail initialization if leaderboard refresh fails
-	}
+	s.refreshLeaderboards(ctx, guildID)
 
 	return nil
 }
@@ -194,7 +190,26 @@ func (s *InitializerService) ensureChannel(_ context.Context, guildID, name, par
 		log.Printf("[Guild %s] Channel %s (ID: %s) not found in Discord, recreating", guildID, name, *channelID)
 	}
 
-	// Read-only: @everyone can view but not send; bot, server owner, and admin role can send
+	overwrites := s.buildReadOnlyPermissions(guildID)
+
+	channel, err := s.session.GuildChannelCreateComplex(guildID, discordgo.GuildChannelCreateData{
+		Name:                 name,
+		Type:                 discordgo.ChannelTypeGuildText,
+		ParentID:             parentID,
+		PermissionOverwrites: overwrites,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to create channel %s: %w", name, err)
+	}
+
+	*channelID = channel.ID
+	log.Printf("[Guild %s] Created channel %s: %s", guildID, name, channel.ID)
+	return true, nil
+}
+
+// buildReadOnlyPermissions creates permission overwrites so @everyone can view but not send,
+// while the bot, server owner, and "admin" role can send.
+func (s *InitializerService) buildReadOnlyPermissions(guildID string) []*discordgo.PermissionOverwrite {
 	allowSend := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages)
 	overwrites := []*discordgo.PermissionOverwrite{
 		{ID: guildID, Type: discordgo.PermissionOverwriteTypeRole, Allow: discordgo.PermissionViewChannel, Deny: discordgo.PermissionSendMessages},
@@ -220,20 +235,7 @@ func (s *InitializerService) ensureChannel(_ context.Context, guildID, name, par
 			}
 		}
 	}
-
-	channel, err := s.session.GuildChannelCreateComplex(guildID, discordgo.GuildChannelCreateData{
-		Name:                 name,
-		Type:                 discordgo.ChannelTypeGuildText,
-		ParentID:             parentID,
-		PermissionOverwrites: overwrites,
-	})
-	if err != nil {
-		return false, fmt.Errorf("failed to create channel %s: %w", name, err)
-	}
-
-	*channelID = channel.ID
-	log.Printf("[Guild %s] Created channel %s: %s", guildID, name, channel.ID)
-	return true, nil
+	return overwrites
 }
 
 func (s *InitializerService) ensureMessages(ctx context.Context, guild *database.Guild) (modified bool, err error) {
@@ -270,7 +272,6 @@ func (s *InitializerService) ensureMessage(ctx context.Context, guildID, dashboa
 		*messageID = "" // Clear invalid message ID
 	}
 
-	// If message doesn't exist, create a placeholder first
 	embed := &discordgo.MessageEmbed{
 		Title:       fmt.Sprintf("%s Dashboard", dashboardType),
 		Description: "Dashboard will be updated when competition starts.",
@@ -285,7 +286,6 @@ func (s *InitializerService) ensureMessage(ctx context.Context, guildID, dashboa
 	*messageID = msg.ID
 	log.Printf("[Guild %s] Created message for %s: %s", guildID, dashboardType, msg.ID)
 
-	// Now try to update with actual leaderboard data if available
 	if leaderboardType == "weekly" {
 		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, eventType); err == nil {
 			log.Printf("[Guild %s] Updated %s leaderboard with active event data", guildID, dashboardType)
@@ -300,11 +300,10 @@ func (s *InitializerService) ensureMessage(ctx context.Context, guildID, dashboa
 	return true, nil
 }
 
-func (s *InitializerService) refreshLeaderboards(ctx context.Context, guildID string) error {
-	// Update weekly and overall leaderboards (leaderboard service logs failures)
+// refreshLeaderboards is best-effort; individual failures are logged by the leaderboard service.
+func (s *InitializerService) refreshLeaderboards(ctx context.Context, guildID string) {
 	s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw")
 	s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw")
 	s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "botw")
 	s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "sotw")
-	return nil
 }

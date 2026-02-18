@@ -2,8 +2,12 @@ package database
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrNoActiveEvent is returned when no active event exists for a guild/type pair.
+var ErrNoActiveEvent = errors.New("no active event found")
 
 type Guild struct {
 	GuildID              string

@@ -1,10 +1,6 @@
 package discord
 
-import (
-	"strings"
-
-	"github.com/bwmarrin/discordgo"
-)
+import "github.com/bwmarrin/discordgo"
 
 func hasAdminPermission(s *discordgo.Session, guildID, userID string) bool {
 	guild, err := s.Guild(guildID)
@@ -26,8 +22,7 @@ func hasAdminPermission(s *discordgo.Session, guildID, userID string) bool {
 		if err != nil {
 			continue
 		}
-		// Check if the user has a role named "admin" (case-insensitive)
-		if strings.EqualFold(role.Name, "admin") {
+		if role.Permissions&discordgo.PermissionAdministrator != 0 {
 			return true
 		}
 	}

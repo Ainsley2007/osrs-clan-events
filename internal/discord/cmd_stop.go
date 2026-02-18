@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -26,7 +25,8 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := cmdContext()
+	defer cancel()
 
 	activeBotwEvents, err := b.Store.GetActiveEvents(ctx, i.GuildID, "botw")
 	if err != nil {
@@ -64,7 +64,8 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	// Do heavy work asynchronously (completing events, leaderboard updates, logging)
 	go func() {
-		ctx := context.Background()
+		ctx, cancel := cmdContext()
+		defer cancel()
 		var botwPointsAwarded, sotwPointsAwarded int
 
 		for _, event := range activeBotwEvents {

@@ -115,13 +115,5 @@ func TestCreateEvent(t *testing.T) {
 }
 
 func errNoActiveEvent() error {
-	// This error string matches Store.GetActiveEvent behavior
-	// for missing active events, which the service treats as non-fatal.
-	return &noActiveEventError{}
-}
-
-type noActiveEventError struct{}
-
-func (e *noActiveEventError) Error() string {
-	return "no active event found"
+	return database.ErrNoActiveEvent
 }

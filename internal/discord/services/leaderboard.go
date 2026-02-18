@@ -155,7 +155,6 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 		return nil, fmt.Errorf("failed to get snapshots: %w", err)
 	}
 
-	// Group by Discord user ID and combine gains
 	userMap := make(map[string]*LeaderboardEntry)
 	for _, swa := range snapshotsWithAccounts {
 		gain := swa.Snapshot.CurrentValue - swa.Snapshot.StartValue
@@ -179,10 +178,8 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 		entry.TotalGain += gain
 	}
 
-	// Calculate points and filter by threshold
-	var entries []LeaderboardEntry
+	entries := make([]LeaderboardEntry, 0, len(userMap))
 	for _, entry := range userMap {
-		// Filter by threshold (combined gain must meet threshold)
 		if event.Type == "botw" {
 			if entry.TotalGain < int64(event.ThresholdKC) {
 				continue
@@ -193,14 +190,12 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 			}
 		}
 
-		// Calculate total points
 		if event.Type == "botw" {
 			entry.TotalPoints = int(float64(entry.TotalGain) * event.PointsPerKC)
 		} else {
 			entry.TotalPoints = int(float64(entry.TotalGain) * event.PointsPerXP)
 		}
 
-		// Fetch Discord username
 		user, err := s.session.User(entry.DiscordID)
 		if err != nil {
 			entry.DiscordName = "Unknown User"
@@ -275,7 +270,6 @@ func (s *LeaderboardService) buildWeeklyLeaderboardEmbed(ctx context.Context, ev
 				rankPrefix = fmt.Sprintf("**%d.**", entry.CurrentRank)
 			}
 
-			// Count accounts with gain > 0
 			accountsWithGain := 0
 			for _, acc := range entry.Accounts {
 				if acc.Gain > 0 {
@@ -377,7 +371,7 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 		return nil, fmt.Errorf("failed to get participants: %w", err)
 	}
 
-	var entries []LeaderboardEntry
+	entries := make([]LeaderboardEntry, 0, len(participants))
 	for _, p := range participants {
 		var totalPoints int
 		if eventType == "botw" {
@@ -449,7 +443,6 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 				rankPrefix = fmt.Sprintf("**%d.**", entry.CurrentRank)
 			}
 
-			// Main entry: icon/rank - name - points (optional account count)
 			pointsLine := fmt.Sprintf("%s <@%s> - points: `%s`", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)))
 			if entry.AccountCount > 0 {
 				accLabel := "account"
@@ -460,7 +453,6 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 			}
 			description.WriteString(pointsLine + "\n")
 
-			// Add spacing between entries (except after the last one)
 			if i < len(entries)-1 && i < 19 {
 				description.WriteString("\n")
 			}

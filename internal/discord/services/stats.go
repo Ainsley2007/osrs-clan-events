@@ -40,26 +40,22 @@ type AccountStat struct {
 }
 
 func (s *StatsService) GetUserEventStats(ctx context.Context, discordUserID, guildID string) ([]EventStats, []EventStats, error) {
-	// Get all accounts for this user
 	accounts, err := s.store.GetAccountsByDiscordID(ctx, discordUserID)
 	if err != nil || len(accounts) == 0 {
 		return nil, nil, fmt.Errorf("no tracked accounts found")
 	}
 
-	// Get all BOTW events for this guild
 	botwEvents, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "botw")
 	if err != nil {
 		botwEvents = []*database.Event{}
 	}
 
-	// Get all SOTW events for this guild
 	sotwEvents, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "sotw")
 	if err != nil {
 		sotwEvents = []*database.Event{}
 	}
 
-	// Build BOTW stats
-	var botwStats []EventStats
+	botwStats := make([]EventStats, 0, len(botwEvents))
 	for _, event := range botwEvents {
 		stats := s.getEventStats(ctx, event, accounts)
 		if len(stats) > 0 {
@@ -81,8 +77,7 @@ func (s *StatsService) GetUserEventStats(ctx context.Context, discordUserID, gui
 		}
 	}
 
-	// Build SOTW stats
-	var sotwStats []EventStats
+	sotwStats := make([]EventStats, 0, len(sotwEvents))
 	for _, event := range sotwEvents {
 		stats := s.getEventStats(ctx, event, accounts)
 		if len(stats) > 0 {
@@ -125,7 +120,6 @@ func (s *StatsService) getEventStats(ctx context.Context, event *database.Event,
 		}
 	}
 
-	// Sort by gain descending
 	sort.Slice(stats, func(i, j int) bool {
 		return stats[i].Gain > stats[j].Gain
 	})
@@ -134,7 +128,6 @@ func (s *StatsService) getEventStats(ctx context.Context, event *database.Event,
 }
 
 func (s *StatsService) calculatePoints(event *database.Event, totalGain int64) int {
-	// Check threshold
 	var threshold int64
 	if event.Type == "botw" {
 		threshold = int64(event.ThresholdKC)
@@ -146,7 +139,6 @@ func (s *StatsService) calculatePoints(event *database.Event, totalGain int64) i
 		return 0
 	}
 
-	// Calculate points
 	var points int
 	if event.Type == "botw" {
 		points = int(float64(totalGain) * event.PointsPerKC)

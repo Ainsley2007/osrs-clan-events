@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
@@ -32,7 +31,8 @@ func (b *Bot) setupLoggingChannelCommand() Command {
 				return
 			}
 
-			ctx := context.Background()
+			ctx, cancel := cmdContext()
+			defer cancel()
 			data := i.ApplicationCommandData()
 
 			var channelID string

@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -23,7 +22,8 @@ func (b *Bot) trackedCommand() Command {
 			},
 		},
 		Handler: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			ctx := context.Background()
+			ctx, cancel := cmdContext()
+			defer cancel()
 
 			if i.GuildID == "" {
 				respondError(s, i.Interaction, fmt.Errorf("this command can only be used in a server"))
