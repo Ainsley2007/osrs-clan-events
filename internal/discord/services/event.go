@@ -28,7 +28,7 @@ func NewEventService(store EventStore, snapshotService SnapshotManager, configPr
 	}
 }
 
-const recentEventsWeightWindow = 10
+const recentEventsWeightWindow = 52 // 52 weeks in a year
 
 type StartEventResult struct {
 	Event          *database.Event
