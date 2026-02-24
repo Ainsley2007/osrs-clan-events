@@ -5,6 +5,7 @@ import (
 
 	"osrs-events/internal/database"
 	"osrs-events/internal/firebase"
+	"osrs-events/internal/osrs"
 )
 
 // AccountStore is the minimal persistence interface for account workflows.
@@ -57,6 +58,7 @@ type LeaderboardStore interface {
 	CountActiveAccountsByDiscordID(ctx context.Context, discordUserID string) (int, error)
 	GetParticipant(ctx context.Context, discordUserID, guildID string) (*database.Participant, error)
 	GetParticipantsByGuild(ctx context.Context, guildID string) ([]*database.Participant, error)
+	GetTotalGainedByParticipant(ctx context.Context, guildID, eventType string) (map[string]int64, error)
 }
 
 // GuildStore is the minimal persistence interface for guild workflows.
@@ -81,6 +83,7 @@ type EventConfigProvider interface {
 // SnapshotManager abstracts snapshot operations used by EventService.
 type SnapshotManager interface {
 	CreateInitialSnapshotsWithResult(ctx context.Context, eventID int64, guildID, metricName, metricType string) (*InitialSnapshotResult, error)
+	CreateInitialSnapshotsForEventsFromStats(ctx context.Context, events []*database.Event, statsByAccountID map[int64]*osrs.PlayerStats) error
 	UpdateSnapshotsForEvent(ctx context.Context, event *database.Event) ([]FailedAccountUpdate, error)
 	CalculateAndAwardPoints(ctx context.Context, event *database.Event) error
 }

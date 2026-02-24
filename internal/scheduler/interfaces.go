@@ -6,6 +6,7 @@ import (
 
 	"osrs-events/internal/database"
 	"osrs-events/internal/discord/services"
+	"osrs-events/internal/osrs"
 )
 
 type Store interface {
@@ -22,6 +23,7 @@ type EventService interface {
 	CompleteEvent(ctx context.Context, event *database.Event) error
 	CompleteEventWithoutSnapshotUpdate(ctx context.Context, event *database.Event) error
 	StartNewEvent(ctx context.Context, guildID string, eventType string, startTime time.Time) (*services.StartEventResult, error)
+	StartNewEventFromRollover(ctx context.Context, guildID string, eventType string, startTime time.Time, statsByAccountID map[int64]*osrs.PlayerStats) (*services.StartEventResult, error)
 }
 
 type SnapshotService interface {

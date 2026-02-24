@@ -1,6 +1,7 @@
 package services
 
 import (
+	"strings"
 	"testing"
 
 	"osrs-events/internal/database"
@@ -98,6 +99,64 @@ func TestAssignRanksWithTies(t *testing.T) {
 				if entries[i].CurrentRank != test.expectedRanks[i] {
 					t.Fatalf("expected rank %d at %d, got %d", test.expectedRanks[i], i, entries[i].CurrentRank)
 				}
+			}
+		})
+	}
+}
+
+func TestFormatOverallEntryLine(t *testing.T) {
+	// Main line never contains "gained"; that is on a separate line for SOTW.
+	line := formatOverallEntryLine("**1.**", LeaderboardEntry{
+		DiscordID: "123", TotalPoints: 100, TotalGain: 50000, AccountCount: 1,
+	})
+	if strings.Contains(line, "gained") {
+		t.Errorf("main line should not contain gained, got %q", line)
+	}
+	if !strings.Contains(line, "100") || !strings.Contains(line, "<@123>") {
+		t.Errorf("main line should have points and mention: %q", line)
+	}
+}
+
+func TestFormatOverallEntryGainedLine(t *testing.T) {
+	tests := []struct {
+		name      string
+		entry     LeaderboardEntry
+		eventType string
+		wantNonEmpty bool
+		wantSubstr   string
+	}{
+		{
+			name: "sotw with total gain returns XP line",
+			entry: LeaderboardEntry{TotalGain: 50000},
+			eventType: "sotw",
+			wantNonEmpty: true,
+			wantSubstr:   "50,000 XP gained",
+		},
+		{
+			name: "botw with total gain returns empty",
+			entry: LeaderboardEntry{TotalGain: 1000},
+			eventType: "botw",
+			wantNonEmpty: false,
+		},
+		{
+			name: "sotw with zero gain returns empty",
+			entry: LeaderboardEntry{TotalGain: 0},
+			eventType: "sotw",
+			wantNonEmpty: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatOverallEntryGainedLine(tt.entry, tt.eventType)
+			if tt.wantNonEmpty {
+				if got == "" {
+					t.Fatalf("expected non-empty line, got %q", got)
+				}
+				if tt.wantSubstr != "" && !strings.Contains(got, tt.wantSubstr) {
+					t.Errorf("expected line to contain %q, got %q", tt.wantSubstr, got)
+				}
+			} else if got != "" {
+				t.Errorf("expected empty line, got %q", got)
 			}
 		})
 	}

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"osrs-events/internal/database"
+	"osrs-events/internal/firebase"
+	"osrs-events/internal/osrs"
 )
 
 type fakeEventStore struct {
@@ -41,4 +43,61 @@ func (f *fakeEventStore) DeactivateEvent(context.Context, int64) error {
 
 func utcNowPlus(minutes int) time.Time {
 	return time.Now().UTC().Add(time.Duration(minutes) * time.Minute)
+}
+
+// fakeSnapshotManagerForRollover records calls to CreateInitialSnapshotsForEventsFromStats for testing.
+type fakeSnapshotManagerForRollover struct {
+	createInitialSnapshotsForEventsFromStatsFn func(ctx context.Context, events []*database.Event, statsByAccountID map[int64]*osrs.PlayerStats) error
+	callCount                                  int
+	lastEvents                                 []*database.Event
+	lastStatsByAccountID                       map[int64]*osrs.PlayerStats
+}
+
+func (f *fakeSnapshotManagerForRollover) CreateInitialSnapshotsForEventsFromStats(ctx context.Context, events []*database.Event, statsByAccountID map[int64]*osrs.PlayerStats) error {
+	f.callCount++
+	f.lastEvents = events
+	f.lastStatsByAccountID = statsByAccountID
+	if f.createInitialSnapshotsForEventsFromStatsFn != nil {
+		return f.createInitialSnapshotsForEventsFromStatsFn(ctx, events, statsByAccountID)
+	}
+	return nil
+}
+
+func (f *fakeSnapshotManagerForRollover) CreateInitialSnapshotsWithResult(context.Context, int64, string, string, string) (*InitialSnapshotResult, error) {
+	return nil, nil
+}
+func (f *fakeSnapshotManagerForRollover) UpdateSnapshotsForEvent(context.Context, *database.Event) ([]FailedAccountUpdate, error) {
+	return nil, nil
+}
+func (f *fakeSnapshotManagerForRollover) CalculateAndAwardPoints(context.Context, *database.Event) error {
+	return nil
+}
+
+// fakeEventConfigProvider returns a fixed boss config for rollover tests.
+type fakeEventConfigProvider struct {
+	boss  *firebase.BossConfig
+	skill *firebase.SkillConfig
+}
+
+func (f *fakeEventConfigProvider) GetRandomBoss(ctx context.Context, excludeName string) (*firebase.BossConfig, error) {
+	if f.boss != nil {
+		return f.boss, nil
+	}
+	return &firebase.BossConfig{
+		Name:         "Vorkath",
+		BossesToTrack: []string{"Vorkath"},
+		PointsPerKC:  1.0,
+		ThresholdKC:  50,
+	}, nil
+}
+
+func (f *fakeEventConfigProvider) GetRandomSkill(ctx context.Context, excludeName string) (*firebase.SkillConfig, error) {
+	if f.skill != nil {
+		return f.skill, nil
+	}
+	return &firebase.SkillConfig{
+		Name:         "Attack",
+		PointsPerXP:  0.001,
+		XPThreshold:  1000,
+	}, nil
 }

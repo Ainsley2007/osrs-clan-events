@@ -144,6 +144,10 @@ type Store interface {
 	// Points
 	UpdateParticipantPoints(ctx context.Context, updates []*ParticipantPointUpdate) error
 
+	// GetTotalGainedByParticipant returns total gained (current_value - start_value) per participant for the guild and event type.
+	// Key = Discord user ID, value = sum across all their accounts and all events of that type in the guild.
+	GetTotalGainedByParticipant(ctx context.Context, guildID, eventType string) (map[string]int64, error)
+
 	// Donations
 	SaveDonation(ctx context.Context, donation *Donation) error
 	GetDonationsByGuild(ctx context.Context, guildID string) ([]*Donation, error)

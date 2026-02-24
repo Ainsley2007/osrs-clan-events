@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"osrs-events/internal/database"
+	"osrs-events/internal/osrs"
 )
 
 func TestIsEventRunning(t *testing.T) {
@@ -116,4 +117,56 @@ func TestCreateEvent(t *testing.T) {
 
 func errNoActiveEvent() error {
 	return database.ErrNoActiveEvent
+}
+
+func TestStartNewEventFromRollover_callsCreateInitialSnapshotsForEventsFromStats(t *testing.T) {
+	ctx := context.Background()
+	startTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
+
+	var createdEvent *database.Event
+	eventStore := &fakeEventStore{
+		getActiveEventFn: func(ctx context.Context, guildID, eventType string) (*database.Event, error) {
+			return nil, database.ErrNoActiveEvent
+		},
+		getAllEventsByGuildAndTypeFn: func(ctx context.Context, guildID, eventType string) ([]*database.Event, error) {
+			return nil, nil
+		},
+		createEventFn: func(ctx context.Context, event *database.Event) error {
+			event.ID = 99
+			createdEvent = event
+			return nil
+		},
+	}
+
+	fakeSnapshot := &fakeSnapshotManagerForRollover{}
+	configProvider := &fakeEventConfigProvider{}
+
+	svc := NewEventService(eventStore, fakeSnapshot, configProvider)
+	statsByAccountID := map[int64]*osrs.PlayerStats{
+		1: {Skills: []osrs.Skill{{Name: "Vorkath", XP: 100}}},
+	}
+
+	result, err := svc.StartNewEventFromRollover(ctx, "guild1", "botw", startTime, statsByAccountID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if createdEvent == nil {
+		t.Fatal("expected event to be created")
+	}
+	if result.Event != createdEvent {
+		t.Fatal("expected result.Event to be the created event")
+	}
+	if result.MetricName != "Vorkath" {
+		t.Fatalf("expected MetricName Vorkath, got %q", result.MetricName)
+	}
+	if fakeSnapshot.callCount != 1 {
+		t.Fatalf("expected CreateInitialSnapshotsForEventsFromStats to be called once, got %d", fakeSnapshot.callCount)
+	}
+	if len(fakeSnapshot.lastEvents) != 1 || fakeSnapshot.lastEvents[0].ID != 99 {
+		t.Fatalf("expected one event with ID 99, got %+v", fakeSnapshot.lastEvents)
+	}
+	if fakeSnapshot.lastStatsByAccountID == nil || len(fakeSnapshot.lastStatsByAccountID) != 1 {
+		t.Fatalf("expected stats map with one entry, got %+v", fakeSnapshot.lastStatsByAccountID)
+	}
 }

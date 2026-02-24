@@ -8,6 +8,8 @@ import (
 
 	"osrs-events/internal/database"
 	"osrs-events/internal/discord"
+	"osrs-events/internal/discord/services"
+	"osrs-events/internal/osrs"
 )
 
 func (s *Scheduler) runCompletionCheck() {
@@ -151,12 +153,20 @@ func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
 		newEvents       []discord.RolloverResult
 	})
 
-	// Take final snapshot for all events that have ended (fetch stats once per account)
-	// Events are processed when end_time <= now, ensuring each week is exactly 7 days ± a few seconds
+	// Take final snapshot for all events that have ended (fetch stats once per account).
+	// Reuse FetchedStats as initial snapshots for new events so we only hit the API once per account.
+	var snapshotResult *services.UpdateSnapshotsForEventsResult
 	if len(events) > 0 {
-		if _, err := s.snapshotService.UpdateSnapshotsForEvents(ctx, events); err != nil {
+		var err error
+		snapshotResult, err = s.snapshotService.UpdateSnapshotsForEventsWithResult(ctx, events)
+		if err != nil {
 			log.Printf("Failed to batch update final snapshots before completion: %v", err)
 		}
+	}
+
+	fetchedStats := make(map[int64]*osrs.PlayerStats)
+	if snapshotResult != nil && snapshotResult.FetchedStats != nil {
+		fetchedStats = snapshotResult.FetchedStats
 	}
 
 	for _, event := range events {
@@ -191,8 +201,8 @@ func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
 
 		log.Printf("✅ Event %d fully completed (points awarded, leaderboard updated, deactivated)", event.ID)
 
-		// STEP 2: Now create the new event (old one is fully completed and deactivated)
-		rolloverResult, err := s.eventService.StartNewEvent(ctx, event.GuildID, event.Type, event.EndTime)
+		// STEP 2: Create the new event and seed initial snapshots from the same fetch (no extra API calls)
+		rolloverResult, err := s.eventService.StartNewEventFromRollover(ctx, event.GuildID, event.Type, event.EndTime, fetchedStats)
 		if err != nil {
 			log.Printf("CRITICAL: Failed to start new %s event for Guild %s: %v - will retry on next check", event.Type, event.GuildID, err)
 			continue

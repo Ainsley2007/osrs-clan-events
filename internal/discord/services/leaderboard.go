@@ -365,10 +365,36 @@ func assignRanks(entries []LeaderboardEntry) {
 	}
 }
 
+// formatOverallEntryLine builds the main line for the overall leaderboard (points, account count).
+func formatOverallEntryLine(rankPrefix string, entry LeaderboardEntry) string {
+	line := fmt.Sprintf("%s <@%s> - points: `%s`", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)))
+	if entry.AccountCount > 0 {
+		accLabel := "account"
+		if entry.AccountCount != 1 {
+			accLabel = "accounts"
+		}
+		line += fmt.Sprintf(" (%d %s)", entry.AccountCount, accLabel)
+	}
+	return line
+}
+
+// formatOverallEntryGainedLine returns a second line for SOTW showing total XP gained (finished events only), or empty string.
+func formatOverallEntryGainedLine(entry LeaderboardEntry, eventType string) string {
+	if eventType != "sotw" || entry.TotalGain <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("   *%s XP gained (finished events)*", formatNumber(entry.TotalGain))
+}
+
 func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, guildID string, eventType string) (*discordgo.MessageEmbed, error) {
 	participants, err := s.store.GetParticipantsByGuild(ctx, guildID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get participants: %w", err)
+	}
+
+	totalGained, err := s.store.GetTotalGainedByParticipant(ctx, guildID, eventType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total gained by participant: %w", err)
 	}
 
 	entries := make([]LeaderboardEntry, 0, len(participants))
@@ -384,6 +410,7 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 		}
 
 		accountCount, _ := s.store.CountActiveAccountsByDiscordID(ctx, p.DiscordUserID)
+		gained := totalGained[p.DiscordUserID]
 
 		user, err := s.session.User(p.DiscordUserID)
 		discordName := "Unknown User"
@@ -395,6 +422,7 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 			DiscordID:    p.DiscordUserID,
 			DiscordName:  discordName,
 			TotalPoints:  totalPoints,
+			TotalGain:   gained,
 			AccountCount: accountCount,
 			Accounts:     nil, // not used for overall leaderboard
 		})
@@ -443,15 +471,10 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 				rankPrefix = fmt.Sprintf("**%d.**", entry.CurrentRank)
 			}
 
-			pointsLine := fmt.Sprintf("%s <@%s> - points: `%s`", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)))
-			if entry.AccountCount > 0 {
-				accLabel := "account"
-				if entry.AccountCount != 1 {
-					accLabel = "accounts"
-				}
-				pointsLine += fmt.Sprintf(" (%d %s)", entry.AccountCount, accLabel)
+			description.WriteString(formatOverallEntryLine(rankPrefix, entry) + "\n")
+			if gainedLine := formatOverallEntryGainedLine(entry, eventType); gainedLine != "" {
+				description.WriteString(gainedLine + "\n")
 			}
-			description.WriteString(pointsLine + "\n")
 
 			if i < len(entries)-1 && i < 19 {
 				description.WriteString("\n")

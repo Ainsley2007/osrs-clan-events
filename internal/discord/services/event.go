@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"osrs-events/internal/database"
+	"osrs-events/internal/osrs"
 )
 
 type EventService struct {
@@ -31,38 +32,53 @@ type StartEventResult struct {
 }
 
 func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime time.Time) (*StartEventResult, error) {
+	event, metricName, err := s.prepareBotwEvent(ctx, guildID, startTime)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.CreateEvent(ctx, event); err != nil {
+		return nil, fmt.Errorf("failed to create event: %w", err)
+	}
+	snapshotResult, err := s.createSnapshotsIfStarted(ctx, event, startTime, metricName, "boss")
+	if err != nil {
+		return nil, err
+	}
+	return &StartEventResult{
+		Event:          event,
+		MetricName:     metricName,
+		SnapshotResult: snapshotResult,
+	}, nil
+}
+
+// prepareBotwEvent builds a BOTW event (not persisted). Caller must CreateEvent and then create initial snapshots.
+func (s *EventService) prepareBotwEvent(ctx context.Context, guildID string, startTime time.Time) (*database.Event, string, error) {
 	isRunning, err := s.IsEventRunning(ctx, guildID, "botw")
 	if err != nil {
-		return nil, fmt.Errorf("failed to check event status: %w", err)
+		return nil, "", fmt.Errorf("failed to check event status: %w", err)
 	}
-
 	if isRunning {
 		activeEvent, _ := s.GetActiveEvent(ctx, guildID, "botw")
 		if activeEvent != nil {
-			return nil, fmt.Errorf("⏰ A BOTW competition is already running! Ends: %s", activeEvent.EndTime.Format("2006-01-02 15:04"))
+			return nil, "", fmt.Errorf("⏰ A BOTW competition is already running! Ends: %s", activeEvent.EndTime.Format("2006-01-02 15:04"))
 		}
-		return nil, fmt.Errorf("⏰ A BOTW competition is already running!")
+		return nil, "", fmt.Errorf("⏰ A BOTW competition is already running!")
 	}
-
 	previousBoss := ""
 	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "botw"); err == nil && len(events) > 0 {
 		previousBoss = events[0].MetricJsonID
 	}
 	bossConfig, err := s.configProvider.GetRandomBoss(ctx, previousBoss)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch random boss: %w", err)
+		return nil, "", fmt.Errorf("failed to fetch random boss: %w", err)
 	}
-
 	bossesToTrackJSON, err := json.Marshal(bossConfig.BossesToTrack)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal bosses to track: %w", err)
+		return nil, "", fmt.Errorf("failed to marshal bosses to track: %w", err)
 	}
-
 	weekNumber, err := s.GetNextWeekNumber(ctx, guildID, "botw")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get week number: %w", err)
+		return nil, "", fmt.Errorf("failed to get week number: %w", err)
 	}
-
 	event := &database.Event{
 		GuildID:       guildID,
 		Type:          "botw",
@@ -73,51 +89,53 @@ func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime 
 		PointsPerKC:   bossConfig.PointsPerKC,
 		ThresholdKC:   bossConfig.ThresholdKC,
 	}
+	return event, bossConfig.Name, nil
+}
 
-	if err := s.CreateEvent(ctx, event); err != nil {
-		return nil, fmt.Errorf("failed to create event: %w", err)
-	}
-
-	snapshotResult, err := s.createSnapshotsIfStarted(ctx, event, startTime, bossConfig.Name, "boss")
+func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime time.Time) (*StartEventResult, error) {
+	event, metricName, err := s.prepareSotwEvent(ctx, guildID, startTime)
 	if err != nil {
 		return nil, err
 	}
-
+	if err := s.CreateEvent(ctx, event); err != nil {
+		return nil, fmt.Errorf("failed to create event: %w", err)
+	}
+	snapshotResult, err := s.createSnapshotsIfStarted(ctx, event, startTime, metricName, "skill")
+	if err != nil {
+		return nil, err
+	}
 	return &StartEventResult{
 		Event:          event,
-		MetricName:     bossConfig.Name,
+		MetricName:     metricName,
 		SnapshotResult: snapshotResult,
 	}, nil
 }
 
-func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime time.Time) (*StartEventResult, error) {
+// prepareSotwEvent builds a SOTW event (not persisted). Caller must CreateEvent and then create initial snapshots.
+func (s *EventService) prepareSotwEvent(ctx context.Context, guildID string, startTime time.Time) (*database.Event, string, error) {
 	isRunning, err := s.IsEventRunning(ctx, guildID, "sotw")
 	if err != nil {
-		return nil, fmt.Errorf("failed to check event status: %w", err)
+		return nil, "", fmt.Errorf("failed to check event status: %w", err)
 	}
-
 	if isRunning {
 		activeEvent, _ := s.GetActiveEvent(ctx, guildID, "sotw")
 		if activeEvent != nil {
-			return nil, fmt.Errorf("⏰ A SOTW competition is already running! Ends: %s", activeEvent.EndTime.Format("2006-01-02 15:04"))
+			return nil, "", fmt.Errorf("⏰ A SOTW competition is already running! Ends: %s", activeEvent.EndTime.Format("2006-01-02 15:04"))
 		}
-		return nil, fmt.Errorf("⏰ A SOTW competition is already running!")
+		return nil, "", fmt.Errorf("⏰ A SOTW competition is already running!")
 	}
-
 	previousSkill := ""
 	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "sotw"); err == nil && len(events) > 0 {
 		previousSkill = events[0].MetricJsonID
 	}
 	skillConfig, err := s.configProvider.GetRandomSkill(ctx, previousSkill)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch random skill: %w", err)
+		return nil, "", fmt.Errorf("failed to fetch random skill: %w", err)
 	}
-
 	weekNumber, err := s.GetNextWeekNumber(ctx, guildID, "sotw")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get week number: %w", err)
+		return nil, "", fmt.Errorf("failed to get week number: %w", err)
 	}
-
 	event := &database.Event{
 		GuildID:      guildID,
 		Type:         "sotw",
@@ -127,21 +145,7 @@ func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime 
 		PointsPerXP:  skillConfig.PointsPerXP,
 		XPThreshold:  skillConfig.XPThreshold,
 	}
-
-	if err := s.CreateEvent(ctx, event); err != nil {
-		return nil, fmt.Errorf("failed to create event: %w", err)
-	}
-
-	snapshotResult, err := s.createSnapshotsIfStarted(ctx, event, startTime, skillConfig.Name, "skill")
-	if err != nil {
-		return nil, err
-	}
-
-	return &StartEventResult{
-		Event:          event,
-		MetricName:     skillConfig.Name,
-		SnapshotResult: snapshotResult,
-	}, nil
+	return event, skillConfig.Name, nil
 }
 
 // createSnapshotsIfStarted creates initial snapshots when the event's start time is now or in the past.
@@ -218,11 +222,38 @@ func (s *EventService) CompleteEventWithoutSnapshotUpdate(ctx context.Context, e
 	return nil
 }
 
-// StartNewEvent creates a new event after the old one has been completed
-// This is used during rollover to ensure old event is fully processed before new one starts
+// StartNewEvent creates a new event after the old one has been completed (e.g. manual /start).
+// Uses the API to create initial snapshots.
 func (s *EventService) StartNewEvent(ctx context.Context, guildID string, eventType string, startTime time.Time) (*StartEventResult, error) {
 	if eventType == "botw" {
 		return s.StartBotw(ctx, guildID, startTime)
 	}
 	return s.StartSotw(ctx, guildID, startTime)
+}
+
+// StartNewEventFromRollover creates a new event and seeds initial snapshots from pre-fetched stats.
+// Used by the scheduler so one API fetch per account serves both final snapshots and initial snapshots.
+func (s *EventService) StartNewEventFromRollover(ctx context.Context, guildID string, eventType string, startTime time.Time, statsByAccountID map[int64]*osrs.PlayerStats) (*StartEventResult, error) {
+	var event *database.Event
+	var metricName string
+	var err error
+	if eventType == "botw" {
+		event, metricName, err = s.prepareBotwEvent(ctx, guildID, startTime)
+	} else {
+		event, metricName, err = s.prepareSotwEvent(ctx, guildID, startTime)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := s.CreateEvent(ctx, event); err != nil {
+		return nil, fmt.Errorf("failed to create event: %w", err)
+	}
+	if err := s.snapshotService.CreateInitialSnapshotsForEventsFromStats(ctx, []*database.Event{event}, statsByAccountID); err != nil {
+		return nil, fmt.Errorf("failed to create initial snapshots from cache: %w", err)
+	}
+	return &StartEventResult{
+		Event:          event,
+		MetricName:     metricName,
+		SnapshotResult: nil,
+	}, nil
 }

@@ -308,10 +308,12 @@ type snapData struct {
 }
 
 // UpdateSnapshotsForEventsResult contains the result of updating snapshots with timing information.
+// FetchedStats is populated so rollover can reuse the same stats for initial snapshots of new events (1 API call per account).
 type UpdateSnapshotsForEventsResult struct {
 	FailedUpdates []FailedAccountUpdate
 	TotalAccounts int
 	Duration      time.Duration
+	FetchedStats  map[int64]*osrs.PlayerStats // key = account ID
 }
 
 // UpdateSnapshotsForEvents updates snapshots for multiple events efficiently by fetching player stats once per account.
@@ -332,6 +334,7 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 			FailedUpdates: nil,
 			TotalAccounts: 0,
 			Duration:      time.Since(startTime),
+			FetchedStats:  nil,
 		}, nil
 	}
 
@@ -398,7 +401,8 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 		}
 	}
 
-	// 3) Fetch stats once per account; update existing snapshots or create new ones
+	// 3) Fetch stats once per account; update existing snapshots or create new ones; collect stats for rollover reuse
+	fetchedStats := make(map[int64]*osrs.PlayerStats, len(accountSnapshotsMap))
 	for accountID, accSnap := range accountSnapshotsMap {
 		stats, err := s.osrsClient.GetPlayerStats(ctx, accSnap.account.RSN)
 		if err != nil {
@@ -417,6 +421,7 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 			}
 			continue
 		}
+		fetchedStats[accountID] = stats
 
 		for _, sd := range accSnap.snapshots {
 			value, err := s.extractMetricValueFromStats(stats, sd.event)
@@ -474,7 +479,40 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 		FailedUpdates: failedUpdates,
 		TotalAccounts: len(accountSnapshotsMap),
 		Duration:      time.Since(startTime),
+		FetchedStats:  fetchedStats,
 	}, nil
+}
+
+// CreateInitialSnapshotsForEventsFromStats creates initial snapshot rows for the given events using
+// pre-fetched stats (e.g. from UpdateSnapshotsForEventsWithResult). No API calls are made.
+// Used at rollover so the same fetch that updated final snapshots also seeds the new events.
+func (s *SnapshotService) CreateInitialSnapshotsForEventsFromStats(ctx context.Context, events []*database.Event, statsByAccountID map[int64]*osrs.PlayerStats) error {
+	for _, event := range events {
+		accounts, err := s.store.GetAccountsByGuild(ctx, event.GuildID)
+		if err != nil {
+			return fmt.Errorf("failed to get accounts for guild %s: %w", event.GuildID, err)
+		}
+		for _, account := range accounts {
+			stats, ok := statsByAccountID[account.ID]
+			if !ok {
+				continue
+			}
+			value, err := s.extractMetricValueFromStats(stats, event)
+			if err != nil {
+				continue
+			}
+			snapshot := &database.Snapshot{
+				EventID:      event.ID,
+				AccountID:    account.ID,
+				StartValue:   value,
+				CurrentValue: value,
+			}
+			if err := s.store.CreateSnapshot(ctx, snapshot); err != nil {
+				return fmt.Errorf("failed to create snapshot for account %d, event %d: %w", account.ID, event.ID, err)
+			}
+		}
+	}
+	return nil
 }
 
 // extractMetricValueFromStats extracts the metric value from already-fetched PlayerStats

@@ -56,3 +56,29 @@ func (s *SQLiteStore) DeleteParticipant(ctx context.Context, discordUserID, guil
 	_, err := s.db.ExecContext(ctx, query, discordUserID, guildID)
 	return err
 }
+
+func (s *SQLiteStore) GetTotalGainedByParticipant(ctx context.Context, guildID, eventType string) (map[string]int64, error) {
+	// Only include finished events (is_active = 0); excludes the currently active event.
+	query := `SELECT p.discord_user_id, SUM(s.current_value - s.start_value) AS total_gained
+		FROM participants p
+		INNER JOIN accounts a ON a.discord_user_id = p.discord_user_id
+		INNER JOIN snapshots s ON s.account_id = a.id
+		INNER JOIN events e ON s.event_id = e.id AND e.guild_id = p.guild_id AND e.type = ? AND e.is_active = 0
+		WHERE p.guild_id = ?
+		GROUP BY p.discord_user_id`
+	rows, err := s.db.QueryContext(ctx, query, eventType, guildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string]int64)
+	for rows.Next() {
+		var discordUserID string
+		var totalGained int64
+		if err := rows.Scan(&discordUserID, &totalGained); err != nil {
+			return nil, err
+		}
+		result[discordUserID] = totalGained
+	}
+	return result, rows.Err()
+}
