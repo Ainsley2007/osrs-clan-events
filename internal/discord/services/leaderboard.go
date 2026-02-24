@@ -365,17 +365,9 @@ func assignRanks(entries []LeaderboardEntry) {
 	}
 }
 
-// formatOverallEntryLine builds the main line for the overall leaderboard (points, account count).
+// formatOverallEntryLine builds the main line for the overall leaderboard (points only).
 func formatOverallEntryLine(rankPrefix string, entry LeaderboardEntry) string {
-	line := fmt.Sprintf("%s <@%s> - points: `%s`", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)))
-	if entry.AccountCount > 0 {
-		accLabel := "account"
-		if entry.AccountCount != 1 {
-			accLabel = "accounts"
-		}
-		line += fmt.Sprintf(" (%d %s)", entry.AccountCount, accLabel)
-	}
-	return line
+	return fmt.Sprintf("%s <@%s> - points: `%s`", rankPrefix, entry.DiscordID, formatNumber(int64(entry.TotalPoints)))
 }
 
 // formatOverallEntryGainedLine returns a second line for SOTW showing total XP gained (finished events only), or empty string.
@@ -383,7 +375,7 @@ func formatOverallEntryGainedLine(entry LeaderboardEntry, eventType string) stri
 	if eventType != "sotw" || entry.TotalGain <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("   *%s XP gained (finished events)*", formatNumber(entry.TotalGain))
+	return fmt.Sprintf("   ▸ *%s total XP gained*", formatNumber(entry.TotalGain))
 }
 
 func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, guildID string, eventType string) (*discordgo.MessageEmbed, error) {
@@ -422,7 +414,7 @@ func (s *LeaderboardService) buildOverallLeaderboardEmbed(ctx context.Context, g
 			DiscordID:    p.DiscordUserID,
 			DiscordName:  discordName,
 			TotalPoints:  totalPoints,
-			TotalGain:   gained,
+			TotalGain:    gained,
 			AccountCount: accountCount,
 			Accounts:     nil, // not used for overall leaderboard
 		})

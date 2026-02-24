@@ -130,7 +130,7 @@ func TestFormatOverallEntryGainedLine(t *testing.T) {
 			entry: LeaderboardEntry{TotalGain: 50000},
 			eventType: "sotw",
 			wantNonEmpty: true,
-			wantSubstr:   "50,000 XP gained",
+			wantSubstr:   "50,000 total XP gained",
 		},
 		{
 			name: "botw with total gain returns empty",
