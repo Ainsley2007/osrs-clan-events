@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"osrs-events/internal/database"
+	"osrs-events/internal/firebase"
 	"osrs-events/internal/osrs"
 )
 
@@ -139,7 +140,7 @@ func TestStartNewEventFromRollover_callsCreateInitialSnapshotsForEventsFromStats
 	}
 
 	fakeSnapshot := &fakeSnapshotManagerForRollover{}
-	configProvider := &fakeEventConfigProvider{}
+	configProvider := &fakeOSRSConfigProvider{}
 
 	svc := NewEventService(eventStore, fakeSnapshot, configProvider)
 	statsByAccountID := map[int64]*osrs.PlayerStats{
@@ -169,4 +170,58 @@ func TestStartNewEventFromRollover_callsCreateInitialSnapshotsForEventsFromStats
 	if fakeSnapshot.lastStatsByAccountID == nil || len(fakeSnapshot.lastStatsByAccountID) != 1 {
 		t.Fatalf("expected stats map with one entry, got %+v", fakeSnapshot.lastStatsByAccountID)
 	}
+}
+
+func TestCountOccurrences(t *testing.T) {
+	got := countOccurrences([]string{"Vorkath", "zulrah", "Vorkath", ""})
+	if got["vorkath"] != 2 {
+		t.Errorf("expected vorkath count 2, got %d", got["vorkath"])
+	}
+	if got["zulrah"] != 1 {
+		t.Errorf("expected zulrah count 1, got %d", got["zulrah"])
+	}
+	if _, ok := got[""]; ok {
+		t.Error("empty name should not be in map")
+	}
+}
+
+func TestWeightedPickBoss(t *testing.T) {
+	bosses := []firebase.BossConfig{
+		{Name: "Vorkath"},
+		{Name: "Zulrah"},
+		{Name: "Nightmare"},
+	}
+
+	t.Run("no recent history gives uniform chance", func(t *testing.T) {
+		got := weightedPickBoss(bosses, nil)
+		if got == nil {
+			t.Fatal("expected non-nil")
+		}
+		if got.Name != "Vorkath" && got.Name != "Zulrah" && got.Name != "Nightmare" {
+			t.Errorf("unexpected name %s", got.Name)
+		}
+	})
+
+	t.Run("recent names down-weight those options", func(t *testing.T) {
+		recent := []string{"Vorkath", "Vorkath", "Zulrah"}
+		seen := make(map[string]int)
+		for i := 0; i < 200; i++ {
+			b := weightedPickBoss(bosses, recent)
+			seen[b.Name]++
+		}
+		if seen["Nightmare"] < 50 {
+			t.Errorf("Nightmare (never in recent) should be picked often, got %d/200", seen["Nightmare"])
+		}
+		if seen["Vorkath"]+seen["Zulrah"]+seen["Nightmare"] != 200 {
+			t.Error("expected 200 picks total")
+		}
+	})
+
+	t.Run("single item returns it", func(t *testing.T) {
+		one := []firebase.BossConfig{{Name: "Only"}}
+		got := weightedPickBoss(one, []string{"Only", "Only"})
+		if got == nil || got.Name != "Only" {
+			t.Errorf("expected Only, got %v", got)
+		}
+	})
 }

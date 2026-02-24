@@ -73,31 +73,25 @@ func (f *fakeSnapshotManagerForRollover) CalculateAndAwardPoints(context.Context
 	return nil
 }
 
-// fakeEventConfigProvider returns a fixed boss config for rollover tests.
-type fakeEventConfigProvider struct {
-	boss  *firebase.BossConfig
-	skill *firebase.SkillConfig
+type fakeOSRSConfigProvider struct {
+	config *firebase.OSRSConfig
 }
 
-func (f *fakeEventConfigProvider) GetRandomBoss(ctx context.Context, excludeName string) (*firebase.BossConfig, error) {
-	if f.boss != nil {
-		return f.boss, nil
+func (f *fakeOSRSConfigProvider) FetchOSRSConfig(context.Context) (*firebase.OSRSConfig, error) {
+	if f.config != nil {
+		return f.config, nil
 	}
-	return &firebase.BossConfig{
-		Name:         "Vorkath",
-		BossesToTrack: []string{"Vorkath"},
-		PointsPerKC:  1.0,
-		ThresholdKC:  50,
-	}, nil
-}
-
-func (f *fakeEventConfigProvider) GetRandomSkill(ctx context.Context, excludeName string) (*firebase.SkillConfig, error) {
-	if f.skill != nil {
-		return f.skill, nil
-	}
-	return &firebase.SkillConfig{
-		Name:         "Attack",
-		PointsPerXP:  0.001,
-		XPThreshold:  1000,
+	return &firebase.OSRSConfig{
+		Bosses: []firebase.BossConfig{{
+			Name:          "Vorkath",
+			BossesToTrack: []string{"Vorkath"},
+			PointsPerKC:   1.0,
+			ThresholdKC:   50,
+		}},
+		Skills: []firebase.SkillConfig{{
+			Name:         "Attack",
+			PointsPerXP:  0.001,
+			XPThreshold:  1000,
+		}},
 	}, nil
 }

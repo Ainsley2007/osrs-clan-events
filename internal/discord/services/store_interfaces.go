@@ -74,10 +74,9 @@ type InitializerStore interface {
 	GetActiveEvent(ctx context.Context, guildID string, eventType string) (*database.Event, error)
 }
 
-// EventConfigProvider abstracts fetching random boss/skill config for event creation.
-type EventConfigProvider interface {
-	GetRandomBoss(ctx context.Context, excludeName string) (*firebase.BossConfig, error)
-	GetRandomSkill(ctx context.Context, excludeName string) (*firebase.SkillConfig, error)
+// OSRSConfigProvider returns OSRS config (bosses/skills) from e.g. Firebase Remote Config. Selection logic lives in the event service.
+type OSRSConfigProvider interface {
+	FetchOSRSConfig(ctx context.Context) (*firebase.OSRSConfig, error)
 }
 
 // SnapshotManager abstracts snapshot operations used by EventService.

@@ -5,19 +5,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
+	"strings"
 	"time"
 
 	"osrs-events/internal/database"
+	"osrs-events/internal/firebase"
 	"osrs-events/internal/osrs"
 )
 
 type EventService struct {
 	store           EventStore
 	snapshotService SnapshotManager
-	configProvider  EventConfigProvider
+	configProvider  OSRSConfigProvider
 }
 
-func NewEventService(store EventStore, snapshotService SnapshotManager, configProvider EventConfigProvider) *EventService {
+func NewEventService(store EventStore, snapshotService SnapshotManager, configProvider OSRSConfigProvider) *EventService {
 	return &EventService{
 		store:           store,
 		snapshotService: snapshotService,
@@ -25,10 +28,12 @@ func NewEventService(store EventStore, snapshotService SnapshotManager, configPr
 	}
 }
 
+const recentEventsWeightWindow = 10
+
 type StartEventResult struct {
 	Event          *database.Event
 	MetricName     string
-	SnapshotResult *InitialSnapshotResult // nil if snapshots weren't created (event starts in future)
+	SnapshotResult *InitialSnapshotResult
 }
 
 func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime time.Time) (*StartEventResult, error) {
@@ -63,14 +68,18 @@ func (s *EventService) prepareBotwEvent(ctx context.Context, guildID string, sta
 		}
 		return nil, "", fmt.Errorf("⏰ A BOTW competition is already running!")
 	}
-	previousBoss := ""
-	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "botw"); err == nil && len(events) > 0 {
-		previousBoss = events[0].MetricJsonID
-	}
-	bossConfig, err := s.configProvider.GetRandomBoss(ctx, previousBoss)
+	config, err := s.configProvider.FetchOSRSConfig(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to fetch random boss: %w", err)
+		return nil, "", fmt.Errorf("failed to fetch OSRS config: %w", err)
 	}
+	if len(config.Bosses) == 0 {
+		return nil, "", fmt.Errorf("no bosses configured")
+	}
+	var recentBosses []string
+	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "botw"); err == nil {
+		recentBosses = lastMetricNames(events, recentEventsWeightWindow)
+	}
+	bossConfig := weightedPickBoss(config.Bosses, recentBosses)
 	bossesToTrackJSON, err := json.Marshal(bossConfig.BossesToTrack)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to marshal bosses to track: %w", err)
@@ -124,14 +133,18 @@ func (s *EventService) prepareSotwEvent(ctx context.Context, guildID string, sta
 		}
 		return nil, "", fmt.Errorf("⏰ A SOTW competition is already running!")
 	}
-	previousSkill := ""
-	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "sotw"); err == nil && len(events) > 0 {
-		previousSkill = events[0].MetricJsonID
-	}
-	skillConfig, err := s.configProvider.GetRandomSkill(ctx, previousSkill)
+	config, err := s.configProvider.FetchOSRSConfig(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to fetch random skill: %w", err)
+		return nil, "", fmt.Errorf("failed to fetch OSRS config: %w", err)
 	}
+	if len(config.Skills) == 0 {
+		return nil, "", fmt.Errorf("no skills configured")
+	}
+	var recentSkills []string
+	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "sotw"); err == nil {
+		recentSkills = lastMetricNames(events, recentEventsWeightWindow)
+	}
+	skillConfig := weightedPickSkill(config.Skills, recentSkills)
 	weekNumber, err := s.GetNextWeekNumber(ctx, guildID, "sotw")
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get week number: %w", err)
@@ -256,4 +269,64 @@ func (s *EventService) StartNewEventFromRollover(ctx context.Context, guildID st
 		MetricName:     metricName,
 		SnapshotResult: nil,
 	}, nil
+}
+
+func lastMetricNames(events []*database.Event, n int) []string {
+	if n <= 0 || len(events) == 0 {
+		return nil
+	}
+	if len(events) < n {
+		n = len(events)
+	}
+	out := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		if m := events[i].MetricJsonID; m != "" {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func countOccurrences(names []string) map[string]int {
+	counts := make(map[string]int)
+	for _, n := range names {
+		if n == "" {
+			continue
+		}
+		counts[strings.ToLower(n)]++
+	}
+	return counts
+}
+
+func weightedPickBoss(bosses []firebase.BossConfig, recentNames []string) *firebase.BossConfig {
+	return weightedPick(bosses, recentNames, func(b firebase.BossConfig) string { return b.Name })
+}
+
+func weightedPickSkill(skills []firebase.SkillConfig, recentNames []string) *firebase.SkillConfig {
+	return weightedPick(skills, recentNames, func(s firebase.SkillConfig) string { return s.Name })
+}
+
+func weightedPick[T any](items []T, recentNames []string, nameOf func(T) string) *T {
+	counts := countOccurrences(recentNames)
+	var totalWeight float64
+	weights := make([]float64, len(items))
+	for i, item := range items {
+		name := strings.ToLower(nameOf(item))
+		count := counts[name]
+		w := 1.0 / float64(1+count)
+		weights[i] = w
+		totalWeight += w
+	}
+	if totalWeight <= 0 {
+		i := rand.Intn(len(items))
+		return &items[i]
+	}
+	r := rand.Float64() * totalWeight
+	for i, w := range weights {
+		r -= w
+		if r <= 0 {
+			return &items[i]
+		}
+	}
+	return &items[len(items)-1]
 }
