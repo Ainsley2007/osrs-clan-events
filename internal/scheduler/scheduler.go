@@ -41,15 +41,15 @@ func NewWithClock(store Store, eventService EventService, snapshotService Snapsh
 func (s *Scheduler) Start() {
 	log.Println("Starting scheduler...")
 
-	// Process stale events synchronously on startup (events that ended while bot was offline)
+	// Process expired active events synchronously on startup (events that ended while bot was offline)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	staleEvents, err := s.store.GetStaleEvents(ctx)
+	expiredEvents, err := s.store.GetExpiredActiveEvents(ctx)
 	cancel()
 	if err != nil {
-		log.Printf("Error getting stale events on startup: %v", err)
-	} else if len(staleEvents) > 0 {
-		log.Printf("Found %d stale events to process on startup", len(staleEvents))
-		s.processEventCompletionsForEvents(staleEvents)
+		log.Printf("Error getting expired active events on startup: %v", err)
+	} else if len(expiredEvents) > 0 {
+		log.Printf("Found %d expired active events to process on startup", len(expiredEvents))
+		s.processEventCompletionsForEvents(expiredEvents)
 	}
 
 	// Take initial snapshot update for all active events asynchronously (don't block startup)

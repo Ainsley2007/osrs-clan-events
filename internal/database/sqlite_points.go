@@ -6,7 +6,6 @@ import (
 	"fmt"
 )
 
-// Points
 func (s *SQLiteStore) UpdateParticipantPoints(ctx context.Context, updates []*ParticipantPointUpdate) error {
 	if len(updates) == 0 {
 		return nil

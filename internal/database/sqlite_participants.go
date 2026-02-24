@@ -6,7 +6,6 @@ import (
 	"fmt"
 )
 
-// Participants
 func (s *SQLiteStore) SaveParticipant(ctx context.Context, p *Participant) error {
 	query := `INSERT INTO participants (discord_user_id, guild_id, total_points_botw, total_points_sotw)
 		VALUES (?, ?, ?, ?)
@@ -58,7 +57,6 @@ func (s *SQLiteStore) DeleteParticipant(ctx context.Context, discordUserID, guil
 }
 
 func (s *SQLiteStore) GetTotalGainedByParticipant(ctx context.Context, guildID, eventType string) (map[string]int64, error) {
-	// Only include finished events (is_active = 0); excludes the currently active event.
 	query := `SELECT p.discord_user_id, SUM(s.current_value - s.start_value) AS total_gained
 		FROM participants p
 		INNER JOIN accounts a ON a.discord_user_id = p.discord_user_id

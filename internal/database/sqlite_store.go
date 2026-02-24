@@ -131,37 +131,31 @@ func (s *SQLiteStore) init() error {
 		}
 	}
 
-	// Migrations: Add donation columns to existing guilds table (safe to run multiple times)
-	// SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we ignore errors if columns already exist
-	migrationQueries := []string{
+	if err := s.runColumnMigrations(); err != nil {
+		return err
+	}
+	s.ensureUniqueActiveEventIndex()
+	return nil
+}
+
+func (s *SQLiteStore) runColumnMigrations() error {
+	migrations := []string{
 		`ALTER TABLE guilds ADD COLUMN donation_channel_id TEXT;`,
 		`ALTER TABLE guilds ADD COLUMN donation_msg_id TEXT;`,
 	}
-
-	for _, query := range migrationQueries {
-		// Ignore errors if column already exists (SQLite returns "duplicate column name" error)
-		// This is safe for production - existing databases will have the columns, new ones will get them created
-		if _, err := s.db.Exec(query); err != nil {
-			// Check if error is about duplicate column (expected for existing databases)
-			if !strings.Contains(err.Error(), "duplicate column") {
-				// Log unexpected errors but don't fail initialization
-				log.Printf("Warning: migration query failed (may be expected): %v", err)
-			}
+	for _, q := range migrations {
+		if _, err := s.db.Exec(q); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			log.Printf("Warning: migration query failed (may be expected): %v", err)
 		}
 	}
-
-	// Add unique partial index to prevent multiple active events of same type per guild
-	// This is a safety mechanism to prevent the rollover bug from creating duplicate active events
-	indexQuery := `CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_event 
-		ON events(guild_id, type, is_active) 
-		WHERE is_active = 1;`
-	if _, err := s.db.Exec(indexQuery); err != nil {
-		log.Printf("Warning: failed to create unique active event index: %v", err)
-		// Don't fail initialization - this is a safety measure, not critical
-		// Existing databases with duplicate active events will need manual cleanup first
-	}
-
 	return nil
+}
+
+func (s *SQLiteStore) ensureUniqueActiveEventIndex() {
+	q := `CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_event ON events(guild_id, type, is_active) WHERE is_active = 1;`
+	if _, err := s.db.Exec(q); err != nil {
+		log.Printf("Warning: failed to create unique active event index: %v", err)
+	}
 }
 
 func (s *SQLiteStore) Close() error {

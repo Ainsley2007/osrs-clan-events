@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sort"
 	"time"
@@ -71,9 +72,9 @@ func (s *Scheduler) processEventCompletions() {
 	// First, clean up any stale active events (safety mechanism)
 	s.cleanupStaleActiveEvents(ctx)
 
-	events, err := s.store.GetExpiringEvents(ctx)
+	events, err := s.store.GetExpiredActiveEvents(ctx)
 	if err != nil {
-		log.Printf("Error getting expiring events: %v", err)
+		log.Printf("Error getting expired active events: %v", err)
 		return
 	}
 
@@ -160,13 +161,61 @@ func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
 		var err error
 		snapshotResult, err = s.snapshotService.UpdateSnapshotsForEventsWithResult(ctx, events)
 		if err != nil {
-			log.Printf("Failed to batch update final snapshots before completion: %v", err)
+			log.Printf("Failed to batch update final snapshots before completion: %v - skipping rollover", err)
+			return
 		}
 	}
 
 	fetchedStats := make(map[int64]*osrs.PlayerStats)
 	if snapshotResult != nil && snapshotResult.FetchedStats != nil {
 		fetchedStats = snapshotResult.FetchedStats
+	}
+
+	// If any snapshot failures, decide whether to skip rollover (retry later) or proceed.
+	if snapshotResult != nil && len(snapshotResult.FailedUpdates) > 0 {
+		hasTransient := false
+		for _, failed := range snapshotResult.FailedUpdates {
+			var rateLimitErr *osrs.RateLimitError
+			var apiErr *osrs.APIError
+			var notFoundErr *osrs.PlayerNotFoundError
+			if errors.As(failed.Error, &rateLimitErr) {
+				hasTransient = true
+				break
+			}
+			if errors.As(failed.Error, &apiErr) && apiErr.StatusCode >= 500 {
+				hasTransient = true
+				break
+			}
+			if !errors.As(failed.Error, &notFoundErr) {
+				hasTransient = true
+				break
+			}
+		}
+		if hasTransient {
+			log.Printf("Transient snapshot failures (429/5xx or other non-404) - skipping rollover, will retry next tick")
+			return
+		}
+		// All failures are 404. If all accounts in the batch failed, treat as service down.
+		uniqueFailed := make(map[string]struct{})
+		for _, f := range snapshotResult.FailedUpdates {
+			uniqueFailed[f.RSN] = struct{}{}
+		}
+		if snapshotResult.TotalAccounts > 0 && len(uniqueFailed) >= snapshotResult.TotalAccounts {
+			log.Printf("404 for all accounts in batch (service may be down) - skipping rollover, will retry next tick")
+			return
+		}
+		// Proceed with rollover; log each 404 to guild (name changes).
+		for _, failed := range snapshotResult.FailedUpdates {
+			var notFoundErr *osrs.PlayerNotFoundError
+			if !errors.As(failed.Error, &notFoundErr) {
+				continue
+			}
+			guild, err := s.store.GetGuild(ctx, failed.GuildID)
+			if err != nil || guild == nil || guild.LogChannelID == "" {
+				continue
+			}
+			discord.SendAccountNotFoundLog(s.session, guild.LogChannelID, failed.RSN)
+		}
 	}
 
 	for _, event := range events {

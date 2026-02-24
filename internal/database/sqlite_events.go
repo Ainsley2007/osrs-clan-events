@@ -7,29 +7,6 @@ import (
 	"log"
 )
 
-// Events
-func (s *SQLiteStore) SaveEvent(ctx context.Context, e *Event) error {
-	if e.ID == 0 {
-		query := `INSERT INTO events (guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		res, err := s.db.ExecContext(ctx, query, e.GuildID, e.Type, e.WeekNumber, e.MetricJsonID, e.BossesToTrack, e.StartTime, e.EndTime, e.IsActive, e.PointsPerKC, e.PointsPerXP, e.ThresholdKC, e.XPThreshold)
-		if err != nil {
-			return err
-		}
-		id, err := res.LastInsertId()
-		if err != nil {
-			return err
-		}
-		e.ID = id
-		return nil
-	}
-
-	query := `UPDATE events SET guild_id = ?, type = ?, week_number = ?, metric_json_id = ?, bosses_to_track = ?, start_time = ?, end_time = ?, is_active = ?, points_per_kc = ?, points_per_xp = ?, threshold_kc = ?, xp_threshold = ?
-		WHERE id = ?`
-	_, err := s.db.ExecContext(ctx, query, e.GuildID, e.Type, e.WeekNumber, e.MetricJsonID, e.BossesToTrack, e.StartTime, e.EndTime, e.IsActive, e.PointsPerKC, e.PointsPerXP, e.ThresholdKC, e.XPThreshold, e.ID)
-	return err
-}
-
 func (s *SQLiteStore) GetEvent(ctx context.Context, id int64) (*Event, error) {
 	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold FROM events WHERE id = ?`
 	var e Event
@@ -43,24 +20,21 @@ func (s *SQLiteStore) GetEvent(ctx context.Context, id int64) (*Event, error) {
 }
 
 func (s *SQLiteStore) GetActiveEvent(ctx context.Context, guildID string, eventType string) (*Event, error) {
-	// Use GetActiveEvents to check for duplicates (safety check)
 	events, err := s.GetActiveEvents(ctx, guildID, eventType)
 	if err != nil {
 		return nil, err
 	}
-	
 	if len(events) == 0 {
 		return nil, ErrNoActiveEvent
 	}
-	
-	// Safeguard: Warn if multiple active events exist (should be prevented by unique index)
-	if len(events) > 1 {
-		log.Printf("⚠️  WARNING: Found %d active %s events for guild %s (should be impossible with unique index). Returning newest.", 
-			len(events), eventType, guildID)
-		// Return the newest one (already sorted by start_time DESC)
-	}
-	
+	s.logDuplicateActiveEventsIfNeeded(events, eventType, guildID)
 	return events[0], nil
+}
+
+func (s *SQLiteStore) logDuplicateActiveEventsIfNeeded(events []*Event, eventType, guildID string) {
+	if len(events) > 1 {
+		log.Printf("⚠️  WARNING: Found %d active %s events for guild %s (should be impossible with unique index). Returning newest.", len(events), eventType, guildID)
+	}
 }
 
 func (s *SQLiteStore) GetActiveEvents(ctx context.Context, guildID string, eventType string) ([]*Event, error) {
@@ -170,39 +144,11 @@ func (s *SQLiteStore) GetAllActiveEvents(ctx context.Context) ([]*Event, error) 
 	return events, rows.Err()
 }
 
-func (s *SQLiteStore) GetExpiringEvents(ctx context.Context) ([]*Event, error) {
-	// Find events that have ended (within 5 minute window to catch them reliably)
-	// Wider window ensures we don't miss events if a previous rollover takes longer than expected
-	// This ensures we process rollovers at the exact end time ± a few minutes
+func (s *SQLiteStore) GetExpiredActiveEvents(ctx context.Context) ([]*Event, error) {
 	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
 		FROM events 
 		WHERE is_active = 1 
 		AND end_time <= datetime('now')
-		AND end_time >= datetime('now', '-5 minutes')
-		ORDER BY end_time ASC`
-
-	rows, err := s.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var events []*Event
-	for rows.Next() {
-		var e Event
-		if err := rows.Scan(&e.ID, &e.GuildID, &e.Type, &e.WeekNumber, &e.MetricJsonID, &e.BossesToTrack, &e.StartTime, &e.EndTime, &e.IsActive, &e.PointsPerKC, &e.PointsPerXP, &e.ThresholdKC, &e.XPThreshold); err != nil {
-			return nil, err
-		}
-		events = append(events, &e)
-	}
-	return events, rows.Err()
-}
-
-func (s *SQLiteStore) GetStaleEvents(ctx context.Context) ([]*Event, error) {
-	query := `SELECT id, guild_id, type, week_number, metric_json_id, bosses_to_track, start_time, end_time, is_active, points_per_kc, points_per_xp, threshold_kc, xp_threshold
-		FROM events 
-		WHERE is_active = 1 
-		AND end_time < datetime('now', '-5 minutes')
 		ORDER BY end_time ASC`
 
 	rows, err := s.db.QueryContext(ctx, query)

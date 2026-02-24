@@ -10,10 +10,9 @@ import (
 )
 
 type Store interface {
-	GetStaleEvents(ctx context.Context) ([]*database.Event, error)
+	GetExpiredActiveEvents(ctx context.Context) ([]*database.Event, error)
 	GetPendingStartEvents(ctx context.Context) ([]*database.Event, error)
 	GetSnapshotsByEvent(ctx context.Context, eventID int64) ([]*database.Snapshot, error)
-	GetExpiringEvents(ctx context.Context) ([]*database.Event, error)
 	GetAllActiveEvents(ctx context.Context) ([]*database.Event, error)
 	GetGuild(ctx context.Context, guildID string) (*database.Guild, error)
 	DeactivateEvent(ctx context.Context, eventID int64) error

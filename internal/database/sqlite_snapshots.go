@@ -6,27 +6,6 @@ import (
 	"fmt"
 )
 
-// Snapshots
-func (s *SQLiteStore) SaveSnapshot(ctx context.Context, snap *Snapshot) error {
-	if snap.ID == 0 {
-		query := `INSERT INTO snapshots (event_id, account_id, start_value, current_value) VALUES (?, ?, ?, ?)`
-		res, err := s.db.ExecContext(ctx, query, snap.EventID, snap.AccountID, snap.StartValue, snap.CurrentValue)
-		if err != nil {
-			return err
-		}
-		id, err := res.LastInsertId()
-		if err != nil {
-			return err
-		}
-		snap.ID = id
-		return nil
-	}
-
-	query := `UPDATE snapshots SET event_id = ?, account_id = ?, start_value = ?, current_value = ? WHERE id = ?`
-	_, err := s.db.ExecContext(ctx, query, snap.EventID, snap.AccountID, snap.StartValue, snap.CurrentValue, snap.ID)
-	return err
-}
-
 func (s *SQLiteStore) CreateSnapshot(ctx context.Context, snap *Snapshot) error {
 	query := `INSERT INTO snapshots (event_id, account_id, start_value, current_value) VALUES (?, ?, ?, ?)`
 	res, err := s.db.ExecContext(ctx, query, snap.EventID, snap.AccountID, snap.StartValue, snap.CurrentValue)

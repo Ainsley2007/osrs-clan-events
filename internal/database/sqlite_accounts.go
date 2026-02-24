@@ -6,7 +6,6 @@ import (
 	"fmt"
 )
 
-// Accounts
 func (s *SQLiteStore) SaveAccount(ctx context.Context, acc *Account) error {
 	if acc.ID == 0 {
 		query := `INSERT INTO accounts (rsn, discord_user_id, error_count, is_active) VALUES (?, ?, ?, ?)`
@@ -62,25 +61,6 @@ func (s *SQLiteStore) CountActiveAccountsByDiscordID(ctx context.Context, discor
 	var count int
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM accounts WHERE discord_user_id = ? AND is_active = 1`, discordUserID).Scan(&count)
 	return count, err
-}
-
-func (s *SQLiteStore) GetActiveAccounts(ctx context.Context) ([]*Account, error) {
-	query := `SELECT id, rsn, discord_user_id, error_count, is_active FROM accounts WHERE is_active = 1`
-	rows, err := s.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var accounts []*Account
-	for rows.Next() {
-		var acc Account
-		if err := rows.Scan(&acc.ID, &acc.RSN, &acc.DiscordUserID, &acc.ErrorCount, &acc.IsActive); err != nil {
-			return nil, err
-		}
-		accounts = append(accounts, &acc)
-	}
-	return accounts, rows.Err()
 }
 
 func (s *SQLiteStore) GetAccountsByGuild(ctx context.Context, guildID string) ([]*Account, error) {

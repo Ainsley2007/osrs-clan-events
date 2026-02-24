@@ -6,7 +6,6 @@ import (
 	"fmt"
 )
 
-// Guilds
 func (s *SQLiteStore) SaveGuild(ctx context.Context, g *Guild) error {
 	query := `INSERT INTO guilds (
 		guild_id, log_channel_id, botw_category_id, botw_channel_id, botw_overall_channel_id,
