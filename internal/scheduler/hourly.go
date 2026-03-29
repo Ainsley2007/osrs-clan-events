@@ -79,18 +79,21 @@ func (s *Scheduler) updateActiveSnapshots() {
 		}
 	}
 
-	// Log 404 errors to the log channel of the guild the account belongs to only
-	for _, failed := range result.FailedUpdates {
-		var notFoundErr *osrs.PlayerNotFoundError
-		if !errors.As(failed.Error, &notFoundErr) {
-			continue
-		}
-		guild := guildsMap[failed.GuildID]
-		if guild == nil || guild.LogChannelID == "" {
-			continue
-		}
-		discord.SendAccountNotFoundLog(s.session, guild.LogChannelID, failed.RSN)
-	}
+	// TODO: Log 404 errors to the log channel with proper rate limiting
+	// For now, disabled to prevent spam every hour
+	// See: https://github.com/Ainsley2007/osrs-clan-events/issues/XXX
+	// Disabled: discord.SendAccountNotFoundLog() - will re-enable with DM notifications + rate limiting
+	// for _, failed := range result.FailedUpdates {
+	// 	var notFoundErr *osrs.PlayerNotFoundError
+	// 	if !errors.As(failed.Error, &notFoundErr) {
+	// 		continue
+	// 	}
+	// 	guild := guildsMap[failed.GuildID]
+	// 	if guild == nil || guild.LogChannelID == "" {
+	// 		continue
+	// 	}
+	// 	discord.SendAccountNotFoundLog(s.session, guild.LogChannelID, failed.RSN)
+	// }
 
 	for guildID := range guildsMap {
 		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw")
