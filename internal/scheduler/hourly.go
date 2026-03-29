@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"osrs-events/internal/database"
-	"osrs-events/internal/discord"
-	"osrs-events/internal/osrs"
 )
 
 func (s *Scheduler) runHourlyUpdates() {
