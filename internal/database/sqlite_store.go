@@ -232,6 +232,9 @@ func (s *SQLiteStore) init() error {
 	if err := s.runColumnMigrations(); err != nil {
 		return err
 	}
+	if err := s.migratePBCategoryGroupingColumns(); err != nil {
+		return fmt.Errorf("failed to migrate pb category grouping columns: %w", err)
+	}
 	if err := s.seedPBCategories(); err != nil {
 		return err
 	}
@@ -246,15 +249,81 @@ func (s *SQLiteStore) runColumnMigrations() error {
 		`ALTER TABLE guilds ADD COLUMN pb_category_id TEXT;`,
 		`ALTER TABLE guilds ADD COLUMN pb_leaderboard_channel_id TEXT;`,
 		`ALTER TABLE guilds ADD COLUMN pb_proofs_channel_id TEXT;`,
-		`ALTER TABLE pb_categories ADD COLUMN group_name TEXT NOT NULL DEFAULT 'Minigames';`,
-		`ALTER TABLE pb_categories ADD COLUMN group_order INTEGER NOT NULL DEFAULT 0;`,
-		`ALTER TABLE pb_categories ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0;`,
 	}
 	for _, q := range migrations {
-		if _, err := s.db.Exec(q); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		if _, err := s.db.Exec(q); err != nil && !isDuplicateColumnErr(err) {
 			log.Printf("Warning: migration query failed (may be expected): %v", err)
 		}
 	}
+	return nil
+}
+
+func isDuplicateColumnErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "duplicate column")
+}
+
+func (s *SQLiteStore) hasTableColumn(table, column string) (bool, error) {
+	rows, err := s.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, fmt.Errorf("pragma table_info(%s): %w", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
+			return false, fmt.Errorf("scan table_info(%s): %w", table, err)
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
+func (s *SQLiteStore) migratePBCategoryGroupingColumns() error {
+	migrations := []struct {
+		column string
+		ddl    string
+	}{
+		{column: "group_name", ddl: `ALTER TABLE pb_categories ADD COLUMN group_name TEXT DEFAULT 'Minigames'`},
+		{column: "group_order", ddl: `ALTER TABLE pb_categories ADD COLUMN group_order INTEGER DEFAULT 0`},
+		{column: "display_order", ddl: `ALTER TABLE pb_categories ADD COLUMN display_order INTEGER DEFAULT 0`},
+	}
+
+	for _, migration := range migrations {
+		has, err := s.hasTableColumn("pb_categories", migration.column)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+
+		if _, err := s.db.Exec(migration.ddl); err != nil && !isDuplicateColumnErr(err) {
+			return fmt.Errorf("add pb_categories.%s: %w", migration.column, err)
+		}
+
+		has, err = s.hasTableColumn("pb_categories", migration.column)
+		if err != nil {
+			return err
+		}
+		if !has {
+			return fmt.Errorf("pb_categories.%s still missing after migration", migration.column)
+		}
+	}
+
 	return nil
 }
 
