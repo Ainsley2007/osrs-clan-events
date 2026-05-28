@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"osrs-events/internal/database"
 	"osrs-events/internal/firebase"
@@ -72,6 +73,9 @@ type InitializerStore interface {
 	GetGuild(ctx context.Context, guildID string) (*database.Guild, error)
 	SaveGuild(ctx context.Context, guild *database.Guild) error
 	GetActiveEvent(ctx context.Context, guildID string, eventType string) (*database.Event, error)
+	GetActivePBCategories(ctx context.Context) ([]*database.PBCategory, error)
+	GetPBLeaderboardMessage(ctx context.Context, guildID, categorySlug string) (*database.PBLeaderboardMessage, error)
+	UpsertPBLeaderboardMessage(ctx context.Context, message *database.PBLeaderboardMessage) error
 }
 
 // OSRSConfigProvider returns OSRS config (bosses/skills) from e.g. Firebase Remote Config. Selection logic lives in the event service.
@@ -96,4 +100,19 @@ type DonationStore interface {
 	SaveDonationSpending(ctx context.Context, spending *database.DonationSpending) error
 	GetTotalSpent(ctx context.Context, guildID string) (int64, error)
 	UpdateDonationMessageID(ctx context.Context, guildID, messageID string) error
+}
+
+type PBStore interface {
+	GetGuild(ctx context.Context, guildID string) (*database.Guild, error)
+	GetPBCategoryBySlug(ctx context.Context, slug string) (*database.PBCategory, error)
+	CreatePBSubmission(ctx context.Context, submission *database.PBSubmission) error
+	UpdatePBSubmissionProofMessageID(ctx context.Context, submissionID int64, messageID string, updatedAt time.Time) error
+	GetPendingPBSubmissionByProofMessageID(ctx context.Context, guildID, proofMessageID string) (*database.PBSubmission, error)
+	ApprovePBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error
+	RejectPBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error
+	GetPBSubmission(ctx context.Context, submissionID int64) (*database.PBSubmission, error)
+	UpsertPBRecordIfBetter(ctx context.Context, record *database.PBRecord) (bool, error)
+	GetTopPBRecords(ctx context.Context, guildID, categorySlug string, limit int) ([]*database.PBRecord, error)
+	GetPBLeaderboardMessage(ctx context.Context, guildID, categorySlug string) (*database.PBLeaderboardMessage, error)
+	UpsertPBLeaderboardMessage(ctx context.Context, message *database.PBLeaderboardMessage) error
 }

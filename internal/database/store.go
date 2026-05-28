@@ -9,22 +9,25 @@ import (
 var ErrNoActiveEvent = errors.New("no active event found")
 
 type Guild struct {
-	GuildID              string
-	LogChannelID         string
-	BotwCategoryID       string
-	BotwChannelID        string
-	BotwOverallChannelID string
-	BotwMsgID            string
-	BotwOverallMsgID     string
-	SotwCategoryID       string
-	SotwChannelID        string
-	SotwOverallChannelID string
-	SotwMsgID            string
-	SotwOverallMsgID     string
-	DonationChannelID    string
-	DonationMsgID        string
-	IntervalDay          string
-	IntervalTime         string
+	GuildID                string
+	LogChannelID           string
+	BotwCategoryID         string
+	BotwChannelID          string
+	BotwOverallChannelID   string
+	BotwMsgID              string
+	BotwOverallMsgID       string
+	SotwCategoryID         string
+	SotwChannelID          string
+	SotwOverallChannelID   string
+	SotwMsgID              string
+	SotwOverallMsgID       string
+	PbCategoryID           string
+	PbLeaderboardChannelID string
+	PbProofsChannelID      string
+	DonationChannelID      string
+	DonationMsgID          string
+	IntervalDay            string
+	IntervalTime           string
 }
 
 type Participant struct {
@@ -83,6 +86,53 @@ type MissingAccountNotification struct {
 	ResolvedAt    *time.Time
 }
 
+type PBCategory struct {
+	ID            int64
+	Slug          string
+	DisplayName   string
+	IsActive      bool
+	EmbedImageURL string
+}
+
+type PBSubmission struct {
+	ID                  int64
+	GuildID             string
+	CategorySlug        string
+	DiscordUserID       string
+	DisplayName         string
+	TimeText            *string
+	TimeCentiseconds    *int64
+	ProofURL            string
+	ProofMessageID      *string
+	Status              string
+	ReviewedByDiscordID *string
+	ReviewedAt          *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type PBRecord struct {
+	ID                int64
+	GuildID           string
+	CategorySlug      string
+	DiscordUserID     string
+	DisplayName       string
+	TimeText          string
+	TimeCentiseconds  int64
+	ProofSubmissionID int64
+	ProofURL          string
+	UpdatedAt         time.Time
+	CreatedAt         time.Time
+}
+
+type PBLeaderboardMessage struct {
+	GuildID      string
+	CategorySlug string
+	ChannelID    string
+	MessageID    string
+	UpdatedAt    time.Time
+}
+
 type ParticipantPointUpdate struct {
 	DiscordUserID string
 	GuildID       string
@@ -126,6 +176,8 @@ type Store interface {
 	GetAccountByRSN(ctx context.Context, rsn, discordUserID string) (*Account, error)
 	DeleteAccount(ctx context.Context, id int64) error
 	UpdateAccountRSN(ctx context.Context, id int64, newRSN string) error
+	GetActivePBCategories(ctx context.Context) ([]*PBCategory, error)
+	GetPBCategoryBySlug(ctx context.Context, slug string) (*PBCategory, error)
 
 	GetEvent(ctx context.Context, id int64) (*Event, error)
 	GetActiveEvent(ctx context.Context, guildID string, eventType string) (*Event, error)
@@ -149,6 +201,16 @@ type Store interface {
 	GetUnresolvedMissingAccountNotificationsByGuild(ctx context.Context, guildID string) ([]*MissingAccountNotification, error)
 	ShouldSendMissingAccountWeeklySummary(ctx context.Context, guildID, weekKey string) (bool, error)
 	MarkMissingAccountWeeklySummarySent(ctx context.Context, guildID, weekKey string, sentAt time.Time) error
+	CreatePBSubmission(ctx context.Context, submission *PBSubmission) error
+	UpdatePBSubmissionProofMessageID(ctx context.Context, submissionID int64, messageID string, updatedAt time.Time) error
+	GetPendingPBSubmissionByProofMessageID(ctx context.Context, guildID, proofMessageID string) (*PBSubmission, error)
+	ApprovePBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error
+	RejectPBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error
+	GetPBSubmission(ctx context.Context, submissionID int64) (*PBSubmission, error)
+	UpsertPBRecordIfBetter(ctx context.Context, record *PBRecord) (bool, error)
+	GetTopPBRecords(ctx context.Context, guildID, categorySlug string, limit int) ([]*PBRecord, error)
+	GetPBLeaderboardMessage(ctx context.Context, guildID, categorySlug string) (*PBLeaderboardMessage, error)
+	UpsertPBLeaderboardMessage(ctx context.Context, message *PBLeaderboardMessage) error
 
 	UpdateParticipantPoints(ctx context.Context, updates []*ParticipantPointUpdate) error
 

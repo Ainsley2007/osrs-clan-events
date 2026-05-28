@@ -60,6 +60,9 @@ func (s *SQLiteStore) init() error {
 			sotw_overall_channel_id TEXT,
 			sotw_msg_id TEXT,
 			sotw_overall_msg_id TEXT,
+			pb_category_id TEXT,
+			pb_leaderboard_channel_id TEXT,
+			pb_proofs_channel_id TEXT,
 			donation_channel_id TEXT,
 			donation_msg_id TEXT,
 			interval_day TEXT DEFAULT 'Sunday',
@@ -131,6 +134,64 @@ func (s *SQLiteStore) init() error {
 			ON missing_account_notifications(guild_id, resolved_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_missing_account_notifications_pending_dm
 			ON missing_account_notifications(dm_sent_at, resolved_at);`,
+		`CREATE TABLE IF NOT EXISTS pb_categories (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			slug TEXT NOT NULL UNIQUE,
+			display_name TEXT NOT NULL,
+			is_active BOOLEAN NOT NULL DEFAULT 1,
+			embed_image_url TEXT NOT NULL DEFAULT ''
+		);`,
+		`CREATE TABLE IF NOT EXISTS pb_submissions (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			guild_id TEXT NOT NULL,
+			category_slug TEXT NOT NULL,
+			discord_user_id TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			time_text TEXT,
+			time_centiseconds INTEGER,
+			proof_url TEXT NOT NULL,
+			proof_message_id TEXT,
+			status TEXT NOT NULL,
+			reviewed_by_discord_id TEXT,
+			reviewed_at DATETIME,
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL,
+			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE,
+			FOREIGN KEY (category_slug) REFERENCES pb_categories(slug) ON DELETE RESTRICT
+		);`,
+		`CREATE TABLE IF NOT EXISTS pb_records (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			guild_id TEXT NOT NULL,
+			category_slug TEXT NOT NULL,
+			discord_user_id TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			time_text TEXT NOT NULL,
+			time_centiseconds INTEGER NOT NULL,
+			proof_submission_id INTEGER NOT NULL,
+			proof_url TEXT NOT NULL,
+			updated_at DATETIME NOT NULL,
+			created_at DATETIME NOT NULL,
+			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE,
+			FOREIGN KEY (category_slug) REFERENCES pb_categories(slug) ON DELETE RESTRICT,
+			FOREIGN KEY (proof_submission_id) REFERENCES pb_submissions(id) ON DELETE RESTRICT
+		);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_pb_records_unique_user_category
+			ON pb_records(guild_id, category_slug, discord_user_id);`,
+		`CREATE TABLE IF NOT EXISTS pb_leaderboard_messages (
+			guild_id TEXT NOT NULL,
+			category_slug TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			message_id TEXT NOT NULL,
+			updated_at DATETIME NOT NULL,
+			PRIMARY KEY (guild_id, category_slug),
+			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE,
+			FOREIGN KEY (category_slug) REFERENCES pb_categories(slug) ON DELETE RESTRICT
+		);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_pb_submissions_proof_message
+			ON pb_submissions(guild_id, proof_message_id)
+			WHERE proof_message_id IS NOT NULL;`,
+		`CREATE INDEX IF NOT EXISTS idx_pb_submissions_pending_message
+			ON pb_submissions(guild_id, status, proof_message_id);`,
 		`CREATE TABLE IF NOT EXISTS donations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			guild_id TEXT NOT NULL,
@@ -156,6 +217,9 @@ func (s *SQLiteStore) init() error {
 			return fmt.Errorf("failed to execute query %q: %w", query, err)
 		}
 	}
+	if err := s.seedPBCategories(); err != nil {
+		return err
+	}
 
 	if err := s.runColumnMigrations(); err != nil {
 		return err
@@ -168,11 +232,34 @@ func (s *SQLiteStore) runColumnMigrations() error {
 	migrations := []string{
 		`ALTER TABLE guilds ADD COLUMN donation_channel_id TEXT;`,
 		`ALTER TABLE guilds ADD COLUMN donation_msg_id TEXT;`,
+		`ALTER TABLE guilds ADD COLUMN pb_category_id TEXT;`,
+		`ALTER TABLE guilds ADD COLUMN pb_leaderboard_channel_id TEXT;`,
+		`ALTER TABLE guilds ADD COLUMN pb_proofs_channel_id TEXT;`,
 	}
 	for _, q := range migrations {
 		if _, err := s.db.Exec(q); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			log.Printf("Warning: migration query failed (may be expected): %v", err)
 		}
+	}
+	return nil
+}
+
+func (s *SQLiteStore) seedPBCategories() error {
+	query := `
+		INSERT INTO pb_categories (slug, display_name, is_active, embed_image_url)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(slug) DO UPDATE SET
+			display_name = excluded.display_name,
+			is_active = excluded.is_active,
+			embed_image_url = excluded.embed_image_url`
+
+	if _, err := s.db.Exec(query,
+		"inferno",
+		"Inferno",
+		true,
+		"https://oldschool.runescape.wiki/w/Inferno#/media/File:Inferno_logo.png",
+	); err != nil {
+		return fmt.Errorf("failed to seed pb categories: %w", err)
 	}
 	return nil
 }

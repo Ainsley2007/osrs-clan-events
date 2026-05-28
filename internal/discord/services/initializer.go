@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"osrs-events/internal/database"
 
@@ -53,9 +54,13 @@ func (s *InitializerService) InitializeGuild(ctx context.Context, guildID string
 	if err != nil {
 		return fmt.Errorf("failed to ensure messages: %w", err)
 	}
+	modPBMessages, err := s.ensurePBLeaderboardMessages(ctx, guild)
+	if err != nil {
+		return fmt.Errorf("failed to ensure pb messages: %w", err)
+	}
 
 	// Only persist guild when we created something (new guild or recreated category/channel/message)
-	if newGuild || modCategories || modChannels || modMessages {
+	if newGuild || modCategories || modChannels || modMessages || modPBMessages {
 		if err := s.store.SaveGuild(ctx, guild); err != nil {
 			return fmt.Errorf("failed to save guild: %w", err)
 		}
@@ -93,6 +98,12 @@ func (s *InitializerService) ensureCategories(ctx context.Context, guild *databa
 		sotwMetric = e.MetricJsonID
 	}
 	mod, err = s.ensureCategory(ctx, guild.GuildID, "sotw", sotwMetric, &guild.SotwCategoryID)
+	if err != nil {
+		return false, err
+	}
+	modified = modified || mod
+
+	mod, err = s.ensureNamedCategory(guild.GuildID, "pb Leaderboards", &guild.PbCategoryID)
 	if err != nil {
 		return false, err
 	}
@@ -178,7 +189,39 @@ func (s *InitializerService) ensureChannels(ctx context.Context, guild *database
 		return false, err
 	}
 	modified = modified || mod
+	mod, err = s.ensureChannel(ctx, guild.GuildID, "pb-leaderboard", guild.PbCategoryID, &guild.PbLeaderboardChannelID)
+	if err != nil {
+		return false, err
+	}
+	modified = modified || mod
+	mod, err = s.ensureChannel(ctx, guild.GuildID, "pb-proofs", guild.PbCategoryID, &guild.PbProofsChannelID)
+	if err != nil {
+		return false, err
+	}
+	modified = modified || mod
 	return modified, nil
+}
+
+func (s *InitializerService) ensureNamedCategory(guildID, name string, categoryID *string) (modified bool, err error) {
+	if *categoryID != "" {
+		channel, err := s.session.Channel(*categoryID)
+		if err == nil && channel != nil {
+			return false, nil
+		}
+		log.Printf("[Guild %s] Category %s (ID: %s) not found in Discord, recreating", guildID, name, *categoryID)
+	}
+
+	channel, err := s.session.GuildChannelCreateComplex(guildID, discordgo.GuildChannelCreateData{
+		Name: name,
+		Type: discordgo.ChannelTypeGuildCategory,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to create category %s: %w", name, err)
+	}
+
+	*categoryID = channel.ID
+	log.Printf("[Guild %s] Created category %s: %s", guildID, name, channel.ID)
+	return true, nil
 }
 
 func (s *InitializerService) ensureChannel(_ context.Context, guildID, name, parentID string, channelID *string) (modified bool, err error) {
@@ -306,4 +349,62 @@ func (s *InitializerService) refreshLeaderboards(ctx context.Context, guildID st
 	s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw")
 	s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "botw")
 	s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "sotw")
+}
+
+func (s *InitializerService) ensurePBLeaderboardMessages(ctx context.Context, guild *database.Guild) (bool, error) {
+	if guild.PbLeaderboardChannelID == "" {
+		return false, nil
+	}
+
+	categories, err := s.store.GetActivePBCategories(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to load pb categories: %w", err)
+	}
+
+	modified := false
+	now := time.Now().UTC()
+	for _, category := range categories {
+		if category == nil {
+			continue
+		}
+
+		existingState, err := s.store.GetPBLeaderboardMessage(ctx, guild.GuildID, category.Slug)
+		if err == nil && existingState != nil {
+			msg, msgErr := s.session.ChannelMessage(existingState.ChannelID, existingState.MessageID)
+			if msgErr == nil && msg != nil {
+				continue
+			}
+		}
+
+		embed := &discordgo.MessageEmbed{
+			Title:       fmt.Sprintf("🏆 %s PB Leaderboard", category.DisplayName),
+			Description: "No approved PBs yet.\n\nSubmit your proof with `/submit-pb` to get on the board.",
+			Color:       0xF97316,
+			Timestamp:   now.Format(time.RFC3339),
+			Footer: &discordgo.MessageEmbedFooter{
+				Text: "Last updated",
+			},
+			Image: &discordgo.MessageEmbedImage{
+				URL: category.EmbedImageURL,
+			},
+		}
+
+		msg, err := s.session.ChannelMessageSendEmbed(guild.PbLeaderboardChannelID, embed)
+		if err != nil {
+			return false, fmt.Errorf("failed to create pb leaderboard message for %s: %w", category.Slug, err)
+		}
+
+		if err := s.store.UpsertPBLeaderboardMessage(ctx, &database.PBLeaderboardMessage{
+			GuildID:      guild.GuildID,
+			CategorySlug: category.Slug,
+			ChannelID:    guild.PbLeaderboardChannelID,
+			MessageID:    msg.ID,
+			UpdatedAt:    now,
+		}); err != nil {
+			return false, fmt.Errorf("failed to save pb leaderboard message state: %w", err)
+		}
+		modified = true
+	}
+
+	return modified, nil
 }

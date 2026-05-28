@@ -10,8 +10,9 @@ func (s *SQLiteStore) SaveGuild(ctx context.Context, g *Guild) error {
 	query := `INSERT INTO guilds (
 		guild_id, log_channel_id, botw_category_id, botw_channel_id, botw_overall_channel_id,
 		botw_msg_id, botw_overall_msg_id, sotw_category_id, sotw_channel_id, sotw_overall_channel_id,
-		sotw_msg_id, sotw_overall_msg_id, donation_channel_id, donation_msg_id, interval_day, interval_time
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		sotw_msg_id, sotw_overall_msg_id, pb_category_id, pb_leaderboard_channel_id, pb_proofs_channel_id,
+		donation_channel_id, donation_msg_id, interval_day, interval_time
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(guild_id) DO UPDATE SET
 		log_channel_id = excluded.log_channel_id,
 		botw_category_id = excluded.botw_category_id,
@@ -24,6 +25,9 @@ func (s *SQLiteStore) SaveGuild(ctx context.Context, g *Guild) error {
 		sotw_overall_channel_id = excluded.sotw_overall_channel_id,
 		sotw_msg_id = excluded.sotw_msg_id,
 		sotw_overall_msg_id = excluded.sotw_overall_msg_id,
+		pb_category_id = excluded.pb_category_id,
+		pb_leaderboard_channel_id = excluded.pb_leaderboard_channel_id,
+		pb_proofs_channel_id = excluded.pb_proofs_channel_id,
 		donation_channel_id = excluded.donation_channel_id,
 		donation_msg_id = excluded.donation_msg_id,
 		interval_day = excluded.interval_day,
@@ -32,7 +36,8 @@ func (s *SQLiteStore) SaveGuild(ctx context.Context, g *Guild) error {
 	_, err := s.db.ExecContext(ctx, query,
 		g.GuildID, g.LogChannelID, g.BotwCategoryID, g.BotwChannelID, g.BotwOverallChannelID,
 		g.BotwMsgID, g.BotwOverallMsgID, g.SotwCategoryID, g.SotwChannelID, g.SotwOverallChannelID,
-		g.SotwMsgID, g.SotwOverallMsgID, g.DonationChannelID, g.DonationMsgID, g.IntervalDay, g.IntervalTime,
+		g.SotwMsgID, g.SotwOverallMsgID, g.PbCategoryID, g.PbLeaderboardChannelID, g.PbProofsChannelID,
+		g.DonationChannelID, g.DonationMsgID, g.IntervalDay, g.IntervalTime,
 	)
 	return err
 }
@@ -40,7 +45,10 @@ func (s *SQLiteStore) SaveGuild(ctx context.Context, g *Guild) error {
 func (s *SQLiteStore) GetGuild(ctx context.Context, guildID string) (*Guild, error) {
 	query := `SELECT guild_id, log_channel_id, botw_category_id, botw_channel_id, botw_overall_channel_id,
 		botw_msg_id, botw_overall_msg_id, sotw_category_id, sotw_channel_id, sotw_overall_channel_id,
-		sotw_msg_id, sotw_overall_msg_id, COALESCE(donation_channel_id, '') as donation_channel_id, 
+		sotw_msg_id, sotw_overall_msg_id, COALESCE(pb_category_id, '') as pb_category_id,
+		COALESCE(pb_leaderboard_channel_id, '') as pb_leaderboard_channel_id,
+		COALESCE(pb_proofs_channel_id, '') as pb_proofs_channel_id,
+		COALESCE(donation_channel_id, '') as donation_channel_id, 
 		COALESCE(donation_msg_id, '') as donation_msg_id, interval_day, interval_time
 		FROM guilds WHERE guild_id = ?`
 
@@ -48,7 +56,8 @@ func (s *SQLiteStore) GetGuild(ctx context.Context, guildID string) (*Guild, err
 	err := s.db.QueryRowContext(ctx, query, guildID).Scan(
 		&g.GuildID, &g.LogChannelID, &g.BotwCategoryID, &g.BotwChannelID, &g.BotwOverallChannelID,
 		&g.BotwMsgID, &g.BotwOverallMsgID, &g.SotwCategoryID, &g.SotwChannelID, &g.SotwOverallChannelID,
-		&g.SotwMsgID, &g.SotwOverallMsgID, &g.DonationChannelID, &g.DonationMsgID, &g.IntervalDay, &g.IntervalTime,
+		&g.SotwMsgID, &g.SotwOverallMsgID, &g.PbCategoryID, &g.PbLeaderboardChannelID, &g.PbProofsChannelID,
+		&g.DonationChannelID, &g.DonationMsgID, &g.IntervalDay, &g.IntervalTime,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("guild not found: %s", guildID)
@@ -61,4 +70,3 @@ func (s *SQLiteStore) DeleteGuild(ctx context.Context, guildID string) error {
 	_, err := s.db.ExecContext(ctx, query, guildID)
 	return err
 }
-

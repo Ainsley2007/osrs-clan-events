@@ -23,6 +23,7 @@ type Bot struct {
 	LeaderboardService *services.LeaderboardService
 	ParticipantService *services.ParticipantService
 	DonationService    *services.DonationService
+	PBService          *services.PBService
 	StatsService       *services.StatsService
 	Handlers           map[string]Command
 
@@ -47,6 +48,7 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 	participantService := services.NewParticipantService(store)
 	initializerService := services.NewInitializerService(dg, store, leaderboardService)
 	donationService := services.NewDonationService(store, dg, logger)
+	pbService := services.NewPBService(store, dg, logger)
 	statsService := services.NewStatsService(store)
 
 	bot := &Bot{
@@ -60,6 +62,7 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 		LeaderboardService: leaderboardService,
 		ParticipantService: participantService,
 		DonationService:    donationService,
+		PBService:          pbService,
 		StatsService:       statsService,
 		initInProgress:     make(map[string]bool),
 		logger:             logger,
@@ -69,6 +72,7 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 
 	bot.Session.AddHandler(bot.ready)
 	bot.Session.AddHandler(bot.interactionCreate)
+	bot.Session.AddHandler(bot.messageReactionAdd)
 	bot.Session.AddHandler(bot.guildCreate)
 	bot.Session.AddHandler(bot.guildDelete)
 
