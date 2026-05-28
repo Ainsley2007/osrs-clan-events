@@ -50,10 +50,4 @@ func (b *Bot) messageReactionAdd(s *discordgo.Session, event *discordgo.MessageR
 	if err := b.PBService.MarkProofSubmissionAccepted(event.ChannelID, result, event.UserID, time.Now().UTC()); err != nil {
 		log.Printf("failed to mark accepted proof message reviewed: %v", err)
 	}
-
-	if result.ImprovedPersonalBest {
-		_, _ = s.ChannelMessageSend(event.ChannelID, fmt.Sprintf("✅ Approved **%s** for %s. Leaderboard updated.", result.Submission.DisplayName, result.Category.DisplayName))
-		return
-	}
-	_, _ = s.ChannelMessageSend(event.ChannelID, fmt.Sprintf("✅ Approved **%s** for %s. Existing PB is already faster.", result.Submission.DisplayName, result.Category.DisplayName))
 }
