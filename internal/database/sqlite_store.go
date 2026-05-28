@@ -229,11 +229,10 @@ func (s *SQLiteStore) init() error {
 			return fmt.Errorf("failed to execute query %q: %w", query, err)
 		}
 	}
-	if err := s.seedPBCategories(); err != nil {
+	if err := s.runColumnMigrations(); err != nil {
 		return err
 	}
-
-	if err := s.runColumnMigrations(); err != nil {
+	if err := s.seedPBCategories(); err != nil {
 		return err
 	}
 	s.ensureUniqueActiveEventIndex()
