@@ -101,7 +101,7 @@ func TestBuildLeaderboardEmbed_ShowsTopThreeFastest(t *testing.T) {
 			t.Fatalf("expected name %q in leaderboard: %q", name, desc)
 		}
 	}
-	if !strings.Contains(desc, "[proof](") {
+	if !strings.Contains(desc, "[Proof](") {
 		t.Fatalf("expected proof links in leaderboard: %q", desc)
 	}
 	if !(strings.Index(desc, "Alpha") < strings.Index(desc, "Bravo") &&

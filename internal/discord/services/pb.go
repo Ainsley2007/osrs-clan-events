@@ -315,7 +315,7 @@ func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records
 			case 2:
 				rank = "🥉"
 			}
-			description.WriteString(fmt.Sprintf("%s %s - `%s` ([proof](%s))\n", rank, record.DisplayName, record.TimeText, record.ProofURL))
+			description.WriteString(fmt.Sprintf("%s - %s - [Proof](%s) - %s\n", rank, record.TimeText, record.ProofURL, record.DisplayName))
 		}
 	}
 

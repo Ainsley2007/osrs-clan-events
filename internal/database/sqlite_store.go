@@ -257,7 +257,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 		"inferno",
 		"Inferno",
 		true,
-		"https://oldschool.runescape.wiki/w/Inferno#/media/File:Inferno_logo.png",
+		"https://images-ext-1.discordapp.net/external/X8UMtpv21fsvGtd_bu-JO1YOJNZgd5fxnmwlCMxWuvg/%3F2d222/https/oldschool.runescape.wiki/images/thumb/TzKal-Zuk.png/138px-TzKal-Zuk.png?format=webp&quality=lossless&width=276&height=300",
 	); err != nil {
 		return fmt.Errorf("failed to seed pb categories: %w", err)
 	}
