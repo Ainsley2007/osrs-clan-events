@@ -15,10 +15,10 @@ const (
 
 func (s *SQLiteStore) GetActivePBCategories(ctx context.Context) ([]*PBCategory, error) {
 	query := `
-		SELECT id, slug, display_name, is_active, embed_image_url
+		SELECT id, slug, display_name, group_name, group_order, display_order, is_active, embed_image_url
 		FROM pb_categories
 		WHERE is_active = 1
-		ORDER BY id ASC`
+		ORDER BY group_order ASC, display_order ASC, id ASC`
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -33,6 +33,9 @@ func (s *SQLiteStore) GetActivePBCategories(ctx context.Context) ([]*PBCategory,
 			&category.ID,
 			&category.Slug,
 			&category.DisplayName,
+			&category.GroupName,
+			&category.GroupOrder,
+			&category.DisplayOrder,
 			&category.IsActive,
 			&category.EmbedImageURL,
 		); err != nil {
@@ -45,7 +48,7 @@ func (s *SQLiteStore) GetActivePBCategories(ctx context.Context) ([]*PBCategory,
 
 func (s *SQLiteStore) GetPBCategoryBySlug(ctx context.Context, slug string) (*PBCategory, error) {
 	query := `
-		SELECT id, slug, display_name, is_active, embed_image_url
+		SELECT id, slug, display_name, group_name, group_order, display_order, is_active, embed_image_url
 		FROM pb_categories
 		WHERE slug = ?`
 
@@ -54,6 +57,9 @@ func (s *SQLiteStore) GetPBCategoryBySlug(ctx context.Context, slug string) (*PB
 		&category.ID,
 		&category.Slug,
 		&category.DisplayName,
+		&category.GroupName,
+		&category.GroupOrder,
+		&category.DisplayOrder,
 		&category.IsActive,
 		&category.EmbedImageURL,
 	); err != nil {
@@ -301,33 +307,33 @@ func (s *SQLiteStore) GetTopPBRecords(ctx context.Context, guildID, categorySlug
 	return records, rows.Err()
 }
 
-func (s *SQLiteStore) GetPBLeaderboardMessage(ctx context.Context, guildID, categorySlug string) (*PBLeaderboardMessage, error) {
+func (s *SQLiteStore) GetPBGroupBundleMessage(ctx context.Context, guildID, groupName string) (*PBLeaderboardMessage, error) {
 	query := `
-		SELECT guild_id, category_slug, channel_id, message_id, updated_at
-		FROM pb_leaderboard_messages
-		WHERE guild_id = ? AND category_slug = ?`
+		SELECT guild_id, group_name, channel_id, message_id, updated_at
+		FROM pb_group_bundle_messages
+		WHERE guild_id = ? AND group_name = ?`
 
 	var message PBLeaderboardMessage
-	if err := s.db.QueryRowContext(ctx, query, guildID, categorySlug).Scan(
+	if err := s.db.QueryRowContext(ctx, query, guildID, groupName).Scan(
 		&message.GuildID,
-		&message.CategorySlug,
+		&message.GroupName,
 		&message.ChannelID,
 		&message.MessageID,
 		&message.UpdatedAt,
 	); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("pb leaderboard message not found")
+			return nil, fmt.Errorf("pb group bundle message not found")
 		}
-		return nil, fmt.Errorf("failed to load pb leaderboard message: %w", err)
+		return nil, fmt.Errorf("failed to load pb group bundle message: %w", err)
 	}
 	return &message, nil
 }
 
-func (s *SQLiteStore) UpsertPBLeaderboardMessage(ctx context.Context, message *PBLeaderboardMessage) error {
+func (s *SQLiteStore) UpsertPBGroupBundleMessage(ctx context.Context, message *PBLeaderboardMessage) error {
 	query := `
-		INSERT INTO pb_leaderboard_messages (guild_id, category_slug, channel_id, message_id, updated_at)
+		INSERT INTO pb_group_bundle_messages (guild_id, group_name, channel_id, message_id, updated_at)
 		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(guild_id, category_slug) DO UPDATE SET
+		ON CONFLICT(guild_id, group_name) DO UPDATE SET
 			channel_id = excluded.channel_id,
 			message_id = excluded.message_id,
 			updated_at = excluded.updated_at`
@@ -335,12 +341,86 @@ func (s *SQLiteStore) UpsertPBLeaderboardMessage(ctx context.Context, message *P
 		ctx,
 		query,
 		message.GuildID,
-		message.CategorySlug,
+		message.GroupName,
 		message.ChannelID,
 		message.MessageID,
 		message.UpdatedAt,
 	); err != nil {
-		return fmt.Errorf("failed to upsert pb leaderboard message: %w", err)
+		return fmt.Errorf("failed to upsert pb group bundle message: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) ListPBGroupBundleMessagesByGuild(ctx context.Context, guildID string) ([]*PBLeaderboardMessage, error) {
+	query := `
+		SELECT guild_id, group_name, channel_id, message_id, updated_at
+		FROM pb_group_bundle_messages
+		WHERE guild_id = ?
+		ORDER BY group_name ASC`
+	rows, err := s.db.QueryContext(ctx, query, guildID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pb group bundle messages: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []*PBLeaderboardMessage
+	for rows.Next() {
+		var message PBLeaderboardMessage
+		if err := rows.Scan(
+			&message.GuildID,
+			&message.GroupName,
+			&message.ChannelID,
+			&message.MessageID,
+			&message.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan pb group bundle message: %w", err)
+		}
+		messages = append(messages, &message)
+	}
+	return messages, rows.Err()
+}
+
+func (s *SQLiteStore) DeletePBGroupBundleMessagesByGuild(ctx context.Context, guildID string) error {
+	query := `DELETE FROM pb_group_bundle_messages WHERE guild_id = ?`
+	if _, err := s.db.ExecContext(ctx, query, guildID); err != nil {
+		return fmt.Errorf("failed to delete pb group bundle messages: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) ListLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) ([]*LegacyPBLeaderboardMessage, error) {
+	query := `
+		SELECT guild_id, category_slug, channel_id, message_id, updated_at
+		FROM pb_leaderboard_messages
+		WHERE guild_id = ?
+		ORDER BY category_slug ASC`
+	rows, err := s.db.QueryContext(ctx, query, guildID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list legacy pb leaderboard messages: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []*LegacyPBLeaderboardMessage
+	for rows.Next() {
+		var message LegacyPBLeaderboardMessage
+		if err := rows.Scan(
+			&message.GuildID,
+			&message.CategorySlug,
+			&message.ChannelID,
+			&message.MessageID,
+			&message.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan legacy pb leaderboard message: %w", err)
+		}
+		messages = append(messages, &message)
+	}
+	return messages, rows.Err()
+}
+
+func (s *SQLiteStore) DeleteLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) error {
+	query := `DELETE FROM pb_leaderboard_messages WHERE guild_id = ?`
+	if _, err := s.db.ExecContext(ctx, query, guildID); err != nil {
+		return fmt.Errorf("failed to delete legacy pb leaderboard messages: %w", err)
 	}
 	return nil
 }

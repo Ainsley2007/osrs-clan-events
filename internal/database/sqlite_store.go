@@ -138,6 +138,9 @@ func (s *SQLiteStore) init() error {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			slug TEXT NOT NULL UNIQUE,
 			display_name TEXT NOT NULL,
+			group_name TEXT NOT NULL DEFAULT 'Minigames',
+			group_order INTEGER NOT NULL DEFAULT 0,
+			display_order INTEGER NOT NULL DEFAULT 0,
 			is_active BOOLEAN NOT NULL DEFAULT 1,
 			embed_image_url TEXT NOT NULL DEFAULT ''
 		);`,
@@ -190,6 +193,15 @@ func (s *SQLiteStore) init() error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_pb_submissions_proof_message
 			ON pb_submissions(guild_id, proof_message_id)
 			WHERE proof_message_id IS NOT NULL;`,
+		`CREATE TABLE IF NOT EXISTS pb_group_bundle_messages (
+			guild_id TEXT NOT NULL,
+			group_name TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			message_id TEXT NOT NULL,
+			updated_at DATETIME NOT NULL,
+			PRIMARY KEY (guild_id, group_name),
+			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
+		);`,
 		`CREATE INDEX IF NOT EXISTS idx_pb_submissions_pending_message
 			ON pb_submissions(guild_id, status, proof_message_id);`,
 		`CREATE TABLE IF NOT EXISTS donations (
@@ -235,6 +247,9 @@ func (s *SQLiteStore) runColumnMigrations() error {
 		`ALTER TABLE guilds ADD COLUMN pb_category_id TEXT;`,
 		`ALTER TABLE guilds ADD COLUMN pb_leaderboard_channel_id TEXT;`,
 		`ALTER TABLE guilds ADD COLUMN pb_proofs_channel_id TEXT;`,
+		`ALTER TABLE pb_categories ADD COLUMN group_name TEXT NOT NULL DEFAULT 'Minigames';`,
+		`ALTER TABLE pb_categories ADD COLUMN group_order INTEGER NOT NULL DEFAULT 0;`,
+		`ALTER TABLE pb_categories ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0;`,
 	}
 	for _, q := range migrations {
 		if _, err := s.db.Exec(q); err != nil && !strings.Contains(err.Error(), "duplicate column") {
@@ -246,37 +261,52 @@ func (s *SQLiteStore) runColumnMigrations() error {
 
 func (s *SQLiteStore) seedPBCategories() error {
 	query := `
-		INSERT INTO pb_categories (slug, display_name, is_active, embed_image_url)
-		VALUES (?, ?, ?, ?)
+		INSERT INTO pb_categories (slug, display_name, group_name, group_order, display_order, is_active, embed_image_url)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(slug) DO UPDATE SET
 			display_name = excluded.display_name,
+			group_name = excluded.group_name,
+			group_order = excluded.group_order,
+			display_order = excluded.display_order,
 			is_active = excluded.is_active,
 			embed_image_url = excluded.embed_image_url`
 
 	seeds := []struct {
-		slug        string
-		displayName string
-		imageURL    string
+		slug         string
+		displayName  string
+		groupName    string
+		groupOrder   int
+		displayOrder int
+		imageURL     string
 	}{
 		{
-			slug:        "inferno",
-			displayName: "The Inferno",
-			imageURL:    "https://images-ext-1.discordapp.net/external/X8UMtpv21fsvGtd_bu-JO1YOJNZgd5fxnmwlCMxWuvg/%3F2d222/https/oldschool.runescape.wiki/images/thumb/TzKal-Zuk.png/138px-TzKal-Zuk.png?format=webp&quality=lossless&width=276&height=300",
+			slug:         "inferno",
+			displayName:  "The Inferno",
+			groupName:    "Minigames",
+			groupOrder:   1,
+			displayOrder: 1,
+			imageURL:     "https://images-ext-1.discordapp.net/external/X8UMtpv21fsvGtd_bu-JO1YOJNZgd5fxnmwlCMxWuvg/%3F2d222/https/oldschool.runescape.wiki/images/thumb/TzKal-Zuk.png/138px-TzKal-Zuk.png?format=webp&quality=lossless&width=276&height=300",
 		},
 		{
-			slug:        "fortis_colosseum",
-			displayName: "Fortis Colosseum",
-			imageURL:    "https://images-ext-1.discordapp.net/external/CGjkbhxg5A4Mnqts0bl_dU3KuhjdN14K5ZgBzdQ-6CY/%3F91250/https/oldschool.runescape.wiki/images/thumb/Sol_Heredit.png/104px-Sol_Heredit.png?format=webp&quality=lossless&width=208&height=300",
+			slug:         "fortis_colosseum",
+			displayName:  "Fortis Colosseum",
+			groupName:    "Minigames",
+			groupOrder:   1,
+			displayOrder: 2,
+			imageURL:     "https://images-ext-1.discordapp.net/external/CGjkbhxg5A4Mnqts0bl_dU3KuhjdN14K5ZgBzdQ-6CY/%3F91250/https/oldschool.runescape.wiki/images/thumb/Sol_Heredit.png/104px-Sol_Heredit.png?format=webp&quality=lossless&width=208&height=300",
 		},
 		{
-			slug:        "fight_caves",
-			displayName: "Fight Caves",
-			imageURL:    "https://images-ext-1.discordapp.net/external/5DpjS_0B3SGLKRmBZeR8Yn_PJIvXNtcI-yhqN_r11_k/%3F87507/https/oldschool.runescape.wiki/images/thumb/TzTok-Jad.png/135px-TzTok-Jad.png?format=webp&quality=lossless&width=270&height=296",
+			slug:         "fight_caves",
+			displayName:  "Fight Caves",
+			groupName:    "Minigames",
+			groupOrder:   1,
+			displayOrder: 3,
+			imageURL:     "https://images-ext-1.discordapp.net/external/5DpjS_0B3SGLKRmBZeR8Yn_PJIvXNtcI-yhqN_r11_k/%3F87507/https/oldschool.runescape.wiki/images/thumb/TzTok-Jad.png/135px-TzTok-Jad.png?format=webp&quality=lossless&width=270&height=296",
 		},
 	}
 
 	for _, seed := range seeds {
-		if _, err := s.db.Exec(query, seed.slug, seed.displayName, true, seed.imageURL); err != nil {
+		if _, err := s.db.Exec(query, seed.slug, seed.displayName, seed.groupName, seed.groupOrder, seed.displayOrder, true, seed.imageURL); err != nil {
 			return fmt.Errorf("failed to seed pb category %s: %w", seed.slug, err)
 		}
 	}

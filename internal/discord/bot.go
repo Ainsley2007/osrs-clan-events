@@ -46,9 +46,9 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 	guildService := services.NewGuildService(store)
 	accountService := services.NewAccountService(store, snapshotService, leaderboardService, logger)
 	participantService := services.NewParticipantService(store)
-	initializerService := services.NewInitializerService(dg, store, leaderboardService)
 	donationService := services.NewDonationService(store, dg, logger)
 	pbService := services.NewPBService(store, dg, logger)
+	initializerService := services.NewInitializerService(dg, store, leaderboardService, pbService)
 	statsService := services.NewStatsService(store)
 
 	bot := &Bot{

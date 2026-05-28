@@ -90,6 +90,9 @@ type PBCategory struct {
 	ID            int64
 	Slug          string
 	DisplayName   string
+	GroupName     string
+	GroupOrder    int
+	DisplayOrder  int
 	IsActive      bool
 	EmbedImageURL string
 }
@@ -126,6 +129,14 @@ type PBRecord struct {
 }
 
 type PBLeaderboardMessage struct {
+	GuildID   string
+	GroupName string
+	ChannelID string
+	MessageID string
+	UpdatedAt time.Time
+}
+
+type LegacyPBLeaderboardMessage struct {
 	GuildID      string
 	CategorySlug string
 	ChannelID    string
@@ -209,8 +220,12 @@ type Store interface {
 	GetPBSubmission(ctx context.Context, submissionID int64) (*PBSubmission, error)
 	UpsertPBRecordIfBetter(ctx context.Context, record *PBRecord) (bool, error)
 	GetTopPBRecords(ctx context.Context, guildID, categorySlug string, limit int) ([]*PBRecord, error)
-	GetPBLeaderboardMessage(ctx context.Context, guildID, categorySlug string) (*PBLeaderboardMessage, error)
-	UpsertPBLeaderboardMessage(ctx context.Context, message *PBLeaderboardMessage) error
+	GetPBGroupBundleMessage(ctx context.Context, guildID, groupName string) (*PBLeaderboardMessage, error)
+	UpsertPBGroupBundleMessage(ctx context.Context, message *PBLeaderboardMessage) error
+	ListPBGroupBundleMessagesByGuild(ctx context.Context, guildID string) ([]*PBLeaderboardMessage, error)
+	DeletePBGroupBundleMessagesByGuild(ctx context.Context, guildID string) error
+	ListLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) ([]*LegacyPBLeaderboardMessage, error)
+	DeleteLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) error
 
 	UpdateParticipantPoints(ctx context.Context, updates []*ParticipantPointUpdate) error
 

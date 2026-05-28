@@ -50,6 +50,12 @@ type PBModerationResult struct {
 	ImprovedPersonalBest bool
 }
 
+type pbCategoryGroup struct {
+	Name       string
+	Order      int
+	Categories []*database.PBCategory
+}
+
 func ParsePBTimeStrict(raw string) (int64, string, error) {
 	matches := pbTimePattern.FindStringSubmatch(strings.TrimSpace(raw))
 	if len(matches) != 5 {
@@ -200,7 +206,7 @@ func (s *PBService) HandleApproval(ctx context.Context, guildID, proofMessageID,
 		return nil, fmt.Errorf("failed to load pb category: %w", err)
 	}
 
-	if err := s.RefreshLeaderboard(ctx, guildID, submission.CategorySlug); err != nil {
+	if err := s.RefreshGroupBundle(ctx, guildID, category.GroupName); err != nil {
 		return nil, err
 	}
 
@@ -227,7 +233,10 @@ func (s *PBService) RefreshLeaderboard(ctx context.Context, guildID, categorySlu
 	if err != nil {
 		return err
 	}
+	return s.RefreshGroupBundle(ctx, guildID, category.GroupName)
+}
 
+func (s *PBService) RefreshGroupBundle(ctx context.Context, guildID, groupName string) error {
 	guild, err := s.store.GetGuild(ctx, guildID)
 	if err != nil {
 		return fmt.Errorf("failed to load guild settings: %w", err)
@@ -236,33 +245,243 @@ func (s *PBService) RefreshLeaderboard(ctx context.Context, guildID, categorySlu
 		return fmt.Errorf("PB leaderboard channel is not configured")
 	}
 
-	records, err := s.store.GetTopPBRecords(ctx, guildID, categorySlug, 3)
+	groups, err := s.groupActiveCategories(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load top pb records: %w", err)
+		return err
 	}
 
-	embed := s.buildLeaderboardEmbed(category, records)
-	now := time.Now().UTC()
+	var group *pbCategoryGroup
+	for _, candidate := range groups {
+		if candidate.Name == groupName {
+			group = candidate
+			break
+		}
+	}
+	if group == nil {
+		return fmt.Errorf("pb group %q not found", groupName)
+	}
 
-	state, stateErr := s.store.GetPBLeaderboardMessage(ctx, guildID, categorySlug)
-	if stateErr == nil && state != nil {
-		if _, err := s.session.ChannelMessageEditEmbed(state.ChannelID, state.MessageID, embed); err == nil {
-			state.UpdatedAt = now
-			return s.store.UpsertPBLeaderboardMessage(ctx, state)
+	embeds, err := s.buildGroupEmbeds(ctx, guildID, group.Categories)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	state, err := s.store.GetPBGroupBundleMessage(ctx, guildID, groupName)
+	if err != nil || state == nil {
+		return s.GlobalRebuildGroupBundles(ctx, guildID)
+	}
+
+	if _, err := s.session.ChannelMessage(state.ChannelID, state.MessageID); err != nil {
+		return s.GlobalRebuildGroupBundles(ctx, guildID)
+	}
+
+	content := s.buildGroupBundleContent(group.Name)
+	if _, err := s.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		ID:      state.MessageID,
+		Channel: state.ChannelID,
+		Content: &content,
+		Embeds:  &embeds,
+	}); err != nil {
+		return s.GlobalRebuildGroupBundles(ctx, guildID)
+	}
+	state.UpdatedAt = now
+	return s.store.UpsertPBGroupBundleMessage(ctx, state)
+}
+
+func (s *PBService) RefreshAllGroupBundles(ctx context.Context, guildID string) error {
+	guild, err := s.store.GetGuild(ctx, guildID)
+	if err != nil {
+		return fmt.Errorf("failed to load guild settings: %w", err)
+	}
+	if guild.PbLeaderboardChannelID == "" {
+		return fmt.Errorf("PB leaderboard channel is not configured")
+	}
+
+	groups, err := s.groupActiveCategories(ctx)
+	if err != nil {
+		return err
+	}
+	if len(groups) == 0 {
+		return nil
+	}
+
+	states, err := s.store.ListPBGroupBundleMessagesByGuild(ctx, guildID)
+	if err != nil {
+		return err
+	}
+	stateByGroup := make(map[string]*database.PBLeaderboardMessage, len(states))
+	for _, state := range states {
+		if state == nil {
+			continue
+		}
+		stateByGroup[state.GroupName] = state
+	}
+
+	for _, group := range groups {
+		state := stateByGroup[group.Name]
+		if state == nil {
+			return s.GlobalRebuildGroupBundles(ctx, guildID)
+		}
+		if _, err := s.session.ChannelMessage(state.ChannelID, state.MessageID); err != nil {
+			return s.GlobalRebuildGroupBundles(ctx, guildID)
+		}
+
+		embeds, err := s.buildGroupEmbeds(ctx, guildID, group.Categories)
+		if err != nil {
+			return err
+		}
+		content := s.buildGroupBundleContent(group.Name)
+		if _, err := s.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			ID:      state.MessageID,
+			Channel: state.ChannelID,
+			Content: &content,
+			Embeds:  &embeds,
+		}); err != nil {
+			return s.GlobalRebuildGroupBundles(ctx, guildID)
+		}
+		state.UpdatedAt = time.Now().UTC()
+		if err := s.store.UpsertPBGroupBundleMessage(ctx, state); err != nil {
+			return err
 		}
 	}
 
-	msg, err := s.session.ChannelMessageSendEmbed(guild.PbLeaderboardChannelID, embed)
+	return nil
+}
+
+func (s *PBService) GlobalRebuildGroupBundles(ctx context.Context, guildID string) error {
+	guild, err := s.store.GetGuild(ctx, guildID)
 	if err != nil {
-		return fmt.Errorf("failed to send pb leaderboard embed: %w", err)
+		return fmt.Errorf("failed to load guild settings: %w", err)
 	}
-	return s.store.UpsertPBLeaderboardMessage(ctx, &database.PBLeaderboardMessage{
-		GuildID:      guildID,
-		CategorySlug: categorySlug,
-		ChannelID:    guild.PbLeaderboardChannelID,
-		MessageID:    msg.ID,
-		UpdatedAt:    now,
+	if guild.PbLeaderboardChannelID == "" {
+		return fmt.Errorf("PB leaderboard channel is not configured")
+	}
+
+	states, err := s.store.ListPBGroupBundleMessagesByGuild(ctx, guildID)
+	if err != nil {
+		return err
+	}
+	legacyStates, err := s.store.ListLegacyPBLeaderboardMessagesByGuild(ctx, guildID)
+	if err != nil {
+		return err
+	}
+
+	deletedIDs := map[string]struct{}{}
+	for _, state := range states {
+		if state == nil || state.MessageID == "" {
+			continue
+		}
+		deletedIDs[state.MessageID] = struct{}{}
+		_ = s.session.ChannelMessageDelete(state.ChannelID, state.MessageID)
+	}
+	for _, state := range legacyStates {
+		if state == nil || state.MessageID == "" {
+			continue
+		}
+		if _, alreadyDeleted := deletedIDs[state.MessageID]; alreadyDeleted {
+			continue
+		}
+		_ = s.session.ChannelMessageDelete(state.ChannelID, state.MessageID)
+	}
+
+	if err := s.store.DeletePBGroupBundleMessagesByGuild(ctx, guildID); err != nil {
+		return err
+	}
+	if err := s.store.DeleteLegacyPBLeaderboardMessagesByGuild(ctx, guildID); err != nil {
+		return err
+	}
+
+	groups, err := s.groupActiveCategories(ctx)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	for _, group := range groups {
+		embeds, err := s.buildGroupEmbeds(ctx, guildID, group.Categories)
+		if err != nil {
+			return err
+		}
+		msg, err := s.session.ChannelMessageSendComplex(guild.PbLeaderboardChannelID, &discordgo.MessageSend{
+			Content: s.buildGroupBundleContent(group.Name),
+			Embeds:  embeds,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create pb group bundle %s: %w", group.Name, err)
+		}
+		if err := s.store.UpsertPBGroupBundleMessage(ctx, &database.PBLeaderboardMessage{
+			GuildID:   guildID,
+			GroupName: group.Name,
+			ChannelID: guild.PbLeaderboardChannelID,
+			MessageID: msg.ID,
+			UpdatedAt: now,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *PBService) buildGroupEmbeds(ctx context.Context, guildID string, categories []*database.PBCategory) ([]*discordgo.MessageEmbed, error) {
+	embeds := make([]*discordgo.MessageEmbed, 0, len(categories))
+	for _, category := range categories {
+		records, err := s.store.GetTopPBRecords(ctx, guildID, category.Slug, 3)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load top pb records for %s: %w", category.Slug, err)
+		}
+		embeds = append(embeds, s.buildLeaderboardEmbed(category, records))
+	}
+	return embeds, nil
+}
+
+func (s *PBService) buildGroupBundleContent(groupName string) string {
+	return groupName
+}
+
+func (s *PBService) groupActiveCategories(ctx context.Context) ([]*pbCategoryGroup, error) {
+	categories, err := s.store.GetActivePBCategories(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load pb categories: %w", err)
+	}
+
+	groupMap := make(map[string]*pbCategoryGroup)
+	for _, category := range categories {
+		if category == nil {
+			continue
+		}
+		group := groupMap[category.GroupName]
+		if group == nil {
+			group = &pbCategoryGroup{
+				Name:       category.GroupName,
+				Order:      category.GroupOrder,
+				Categories: make([]*database.PBCategory, 0, 1),
+			}
+			groupMap[category.GroupName] = group
+		}
+		if category.GroupOrder < group.Order {
+			group.Order = category.GroupOrder
+		}
+		group.Categories = append(group.Categories, category)
+	}
+
+	groups := make([]*pbCategoryGroup, 0, len(groupMap))
+	for _, group := range groupMap {
+		sort.Slice(group.Categories, func(i, j int) bool {
+			if group.Categories[i].DisplayOrder != group.Categories[j].DisplayOrder {
+				return group.Categories[i].DisplayOrder < group.Categories[j].DisplayOrder
+			}
+			return group.Categories[i].Slug < group.Categories[j].Slug
+		})
+		groups = append(groups, group)
+	}
+	sort.Slice(groups, func(i, j int) bool {
+		if groups[i].Order != groups[j].Order {
+			return groups[i].Order < groups[j].Order
+		}
+		return groups[i].Name < groups[j].Name
 	})
+
+	return groups, nil
 }
 
 func (s *PBService) buildSubmissionProofEmbed(submission *database.PBSubmission, category *database.PBCategory) *discordgo.MessageEmbed {
@@ -306,14 +525,6 @@ func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records
 	} else {
 		for i, record := range records {
 			rank := fmt.Sprintf("%d.", i+1)
-			switch i {
-			case 0:
-				rank = "🥇"
-			case 1:
-				rank = "🥈"
-			case 2:
-				rank = "🥉"
-			}
 			description.WriteString(fmt.Sprintf("%s - %s - [Proof](%s) - %s\n", rank, record.TimeText, record.ProofURL, record.DisplayName))
 		}
 	}

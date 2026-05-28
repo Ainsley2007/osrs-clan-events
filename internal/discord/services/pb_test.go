@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -107,5 +109,129 @@ func TestBuildLeaderboardEmbed_ShowsTopThreeFastest(t *testing.T) {
 	if !(strings.Index(desc, "Alpha") < strings.Index(desc, "Bravo") &&
 		strings.Index(desc, "Bravo") < strings.Index(desc, "Charlie")) {
 		t.Fatalf("expected sorted order Alpha -> Bravo -> Charlie, got %q", desc)
+	}
+}
+
+type mockPBStore struct {
+	activeCategories []*database.PBCategory
+	topRecordsBySlug map[string][]*database.PBRecord
+}
+
+func (m *mockPBStore) GetGuild(context.Context, string) (*database.Guild, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) GetActivePBCategories(context.Context) ([]*database.PBCategory, error) {
+	return m.activeCategories, nil
+}
+func (m *mockPBStore) GetPBCategoryBySlug(context.Context, string) (*database.PBCategory, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) CreatePBSubmission(context.Context, *database.PBSubmission) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) UpdatePBSubmissionProofMessageID(context.Context, int64, string, time.Time) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) GetPendingPBSubmissionByProofMessageID(context.Context, string, string) (*database.PBSubmission, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) ApprovePBSubmission(context.Context, int64, string, time.Time) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) RejectPBSubmission(context.Context, int64, string, time.Time) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) GetPBSubmission(context.Context, int64) (*database.PBSubmission, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) UpsertPBRecordIfBetter(context.Context, *database.PBRecord) (bool, error) {
+	return false, fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) GetTopPBRecords(_ context.Context, _ string, categorySlug string, _ int) ([]*database.PBRecord, error) {
+	if records, ok := m.topRecordsBySlug[categorySlug]; ok {
+		return records, nil
+	}
+	return nil, nil
+}
+func (m *mockPBStore) GetPBGroupBundleMessage(context.Context, string, string) (*database.PBLeaderboardMessage, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) UpsertPBGroupBundleMessage(context.Context, *database.PBLeaderboardMessage) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *mockPBStore) ListPBGroupBundleMessagesByGuild(context.Context, string) ([]*database.PBLeaderboardMessage, error) {
+	return nil, nil
+}
+func (m *mockPBStore) DeletePBGroupBundleMessagesByGuild(context.Context, string) error {
+	return nil
+}
+func (m *mockPBStore) ListLegacyPBLeaderboardMessagesByGuild(context.Context, string) ([]*database.LegacyPBLeaderboardMessage, error) {
+	return nil, nil
+}
+func (m *mockPBStore) DeleteLegacyPBLeaderboardMessagesByGuild(context.Context, string) error {
+	return nil
+}
+
+func TestGroupActiveCategories_OrdersByGroupAndDisplay(t *testing.T) {
+	store := &mockPBStore{
+		activeCategories: []*database.PBCategory{
+			{Slug: "c3", GroupName: "B", GroupOrder: 2, DisplayOrder: 2},
+			{Slug: "c2", GroupName: "A", GroupOrder: 1, DisplayOrder: 2},
+			{Slug: "c1", GroupName: "A", GroupOrder: 1, DisplayOrder: 1},
+		},
+	}
+	service := &PBService{store: store}
+
+	groups, err := service.groupActiveCategories(context.Background())
+	if err != nil {
+		t.Fatalf("groupActiveCategories returned error: %v", err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(groups))
+	}
+	if groups[0].Name != "A" || groups[1].Name != "B" {
+		t.Fatalf("group order mismatch: got %s then %s", groups[0].Name, groups[1].Name)
+	}
+	if got := groups[0].Categories[0].Slug; got != "c1" {
+		t.Fatalf("expected first category in group A to be c1, got %s", got)
+	}
+}
+
+func TestBuildGroupEmbeds_IncludesEmptyCategoriesAndDynamicCount(t *testing.T) {
+	store := &mockPBStore{
+		topRecordsBySlug: map[string][]*database.PBRecord{
+			"inferno": {
+				{DisplayName: "Alpha", TimeText: "01:00.00", TimeCentiseconds: 6000, ProofURL: "https://proof"},
+			},
+			"fight_caves": {},
+		},
+	}
+	service := &PBService{store: store}
+
+	categories := []*database.PBCategory{
+		{Slug: "inferno", DisplayName: "The Inferno", EmbedImageURL: "https://img1"},
+		{Slug: "fight_caves", DisplayName: "Fight Caves", EmbedImageURL: "https://img2"},
+		{Slug: "new_mode", DisplayName: "New Mode", EmbedImageURL: "https://img3"},
+	}
+
+	embeds, err := service.buildGroupEmbeds(context.Background(), "g1", categories)
+	if err != nil {
+		t.Fatalf("buildGroupEmbeds returned error: %v", err)
+	}
+	if len(embeds) != 3 {
+		t.Fatalf("expected 3 embeds for dynamic category count, got %d", len(embeds))
+	}
+	if !strings.Contains(embeds[1].Description, "No approved PBs yet.") {
+		t.Fatalf("expected empty category description for fight_caves, got %q", embeds[1].Description)
+	}
+	if !strings.Contains(embeds[2].Description, "No approved PBs yet.") {
+		t.Fatalf("expected empty category description for new_mode, got %q", embeds[2].Description)
+	}
+}
+
+func TestBuildGroupBundleContent_UsesGroupNameHeader(t *testing.T) {
+	service := &PBService{}
+	if got := service.buildGroupBundleContent("Minigames"); got != "Minigames" {
+		t.Fatalf("expected group header content to be Minigames, got %q", got)
 	}
 }

@@ -74,8 +74,12 @@ type InitializerStore interface {
 	SaveGuild(ctx context.Context, guild *database.Guild) error
 	GetActiveEvent(ctx context.Context, guildID string, eventType string) (*database.Event, error)
 	GetActivePBCategories(ctx context.Context) ([]*database.PBCategory, error)
-	GetPBLeaderboardMessage(ctx context.Context, guildID, categorySlug string) (*database.PBLeaderboardMessage, error)
-	UpsertPBLeaderboardMessage(ctx context.Context, message *database.PBLeaderboardMessage) error
+	GetPBGroupBundleMessage(ctx context.Context, guildID, groupName string) (*database.PBLeaderboardMessage, error)
+	UpsertPBGroupBundleMessage(ctx context.Context, message *database.PBLeaderboardMessage) error
+	ListPBGroupBundleMessagesByGuild(ctx context.Context, guildID string) ([]*database.PBLeaderboardMessage, error)
+	DeletePBGroupBundleMessagesByGuild(ctx context.Context, guildID string) error
+	ListLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) ([]*database.LegacyPBLeaderboardMessage, error)
+	DeleteLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) error
 }
 
 // OSRSConfigProvider returns OSRS config (bosses/skills) from e.g. Firebase Remote Config. Selection logic lives in the event service.
@@ -104,6 +108,7 @@ type DonationStore interface {
 
 type PBStore interface {
 	GetGuild(ctx context.Context, guildID string) (*database.Guild, error)
+	GetActivePBCategories(ctx context.Context) ([]*database.PBCategory, error)
 	GetPBCategoryBySlug(ctx context.Context, slug string) (*database.PBCategory, error)
 	CreatePBSubmission(ctx context.Context, submission *database.PBSubmission) error
 	UpdatePBSubmissionProofMessageID(ctx context.Context, submissionID int64, messageID string, updatedAt time.Time) error
@@ -113,6 +118,10 @@ type PBStore interface {
 	GetPBSubmission(ctx context.Context, submissionID int64) (*database.PBSubmission, error)
 	UpsertPBRecordIfBetter(ctx context.Context, record *database.PBRecord) (bool, error)
 	GetTopPBRecords(ctx context.Context, guildID, categorySlug string, limit int) ([]*database.PBRecord, error)
-	GetPBLeaderboardMessage(ctx context.Context, guildID, categorySlug string) (*database.PBLeaderboardMessage, error)
-	UpsertPBLeaderboardMessage(ctx context.Context, message *database.PBLeaderboardMessage) error
+	GetPBGroupBundleMessage(ctx context.Context, guildID, groupName string) (*database.PBLeaderboardMessage, error)
+	UpsertPBGroupBundleMessage(ctx context.Context, message *database.PBLeaderboardMessage) error
+	ListPBGroupBundleMessagesByGuild(ctx context.Context, guildID string) ([]*database.PBLeaderboardMessage, error)
+	DeletePBGroupBundleMessagesByGuild(ctx context.Context, guildID string) error
+	ListLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) ([]*database.LegacyPBLeaderboardMessage, error)
+	DeleteLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) error
 }

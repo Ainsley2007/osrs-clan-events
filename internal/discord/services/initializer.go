@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"osrs-events/internal/database"
 
@@ -16,13 +15,20 @@ type InitializerService struct {
 	session            *discordgo.Session
 	store              InitializerStore
 	leaderboardService *LeaderboardService
+	pbService          pbBundleRefresher
 }
 
-func NewInitializerService(session *discordgo.Session, store InitializerStore, leaderboardService *LeaderboardService) *InitializerService {
+type pbBundleRefresher interface {
+	GlobalRebuildGroupBundles(ctx context.Context, guildID string) error
+	RefreshAllGroupBundles(ctx context.Context, guildID string) error
+}
+
+func NewInitializerService(session *discordgo.Session, store InitializerStore, leaderboardService *LeaderboardService, pbService pbBundleRefresher) *InitializerService {
 	return &InitializerService{
 		session:            session,
 		store:              store,
 		leaderboardService: leaderboardService,
+		pbService:          pbService,
 	}
 }
 
@@ -355,56 +361,67 @@ func (s *InitializerService) ensurePBLeaderboardMessages(ctx context.Context, gu
 	if guild.PbLeaderboardChannelID == "" {
 		return false, nil
 	}
+	if s.pbService == nil {
+		return false, fmt.Errorf("pb service is required for grouped leaderboard initialization")
+	}
 
 	categories, err := s.store.GetActivePBCategories(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to load pb categories: %w", err)
 	}
+	if len(categories) == 0 {
+		return false, nil
+	}
 
-	modified := false
-	now := time.Now().UTC()
+	requiredGroups := make(map[string]struct{})
 	for _, category := range categories {
 		if category == nil {
 			continue
 		}
-
-		existingState, err := s.store.GetPBLeaderboardMessage(ctx, guild.GuildID, category.Slug)
-		if err == nil && existingState != nil {
-			msg, msgErr := s.session.ChannelMessage(existingState.ChannelID, existingState.MessageID)
-			if msgErr == nil && msg != nil {
-				continue
-			}
-		}
-
-		embed := &discordgo.MessageEmbed{
-			Title:       category.DisplayName,
-			Description: "No approved PBs yet.\n\nSubmit your proof with `/submit-pb` to get on the board.",
-			Color:       0xF97316,
-			Timestamp:   now.Format(time.RFC3339),
-			Footer: &discordgo.MessageEmbedFooter{
-				Text: "Last updated",
-			},
-			Thumbnail: &discordgo.MessageEmbedThumbnail{
-				URL: category.EmbedImageURL,
-			},
-		}
-
-		msg, err := s.session.ChannelMessageSendEmbed(guild.PbLeaderboardChannelID, embed)
-		if err != nil {
-			return false, fmt.Errorf("failed to create pb leaderboard message for %s: %w", category.Slug, err)
-		}
-
-		if err := s.store.UpsertPBLeaderboardMessage(ctx, &database.PBLeaderboardMessage{
-			GuildID:      guild.GuildID,
-			CategorySlug: category.Slug,
-			ChannelID:    guild.PbLeaderboardChannelID,
-			MessageID:    msg.ID,
-			UpdatedAt:    now,
-		}); err != nil {
-			return false, fmt.Errorf("failed to save pb leaderboard message state: %w", err)
-		}
-		modified = true
+		requiredGroups[category.GroupName] = struct{}{}
 	}
 
-	return modified, nil
+	legacyStates, err := s.store.ListLegacyPBLeaderboardMessagesByGuild(ctx, guild.GuildID)
+	if err != nil {
+		return false, fmt.Errorf("failed to load legacy pb leaderboard states: %w", err)
+	}
+	states, err := s.store.ListPBGroupBundleMessagesByGuild(ctx, guild.GuildID)
+	if err != nil {
+		return false, fmt.Errorf("failed to load pb group bundle states: %w", err)
+	}
+
+	needsGlobalRebuild := len(legacyStates) > 0 || len(states) == 0
+	if !needsGlobalRebuild {
+		stateByGroup := make(map[string]*database.PBLeaderboardMessage, len(states))
+		for _, state := range states {
+			if state == nil {
+				continue
+			}
+			stateByGroup[state.GroupName] = state
+		}
+
+		for groupName := range requiredGroups {
+			state := stateByGroup[groupName]
+			if state == nil {
+				needsGlobalRebuild = true
+				break
+			}
+			if _, msgErr := s.session.ChannelMessage(state.ChannelID, state.MessageID); msgErr != nil {
+				needsGlobalRebuild = true
+				break
+			}
+		}
+	}
+
+	if needsGlobalRebuild {
+		if err := s.pbService.GlobalRebuildGroupBundles(ctx, guild.GuildID); err != nil {
+			return false, fmt.Errorf("failed pb global rebuild: %w", err)
+		}
+		return true, nil
+	}
+
+	if err := s.pbService.RefreshAllGroupBundles(ctx, guild.GuildID); err != nil {
+		return false, fmt.Errorf("failed to refresh pb group bundles: %w", err)
+	}
+	return false, nil
 }

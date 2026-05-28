@@ -155,3 +155,79 @@ func TestUpsertPBRecordIfBetter(t *testing.T) {
 		t.Fatalf("expected best time 6100cs, got %d", records[0].TimeCentiseconds)
 	}
 }
+
+func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	categories, err := store.GetActivePBCategories(ctx)
+	if err != nil {
+		t.Fatalf("GetActivePBCategories returned error: %v", err)
+	}
+	if len(categories) < 3 {
+		t.Fatalf("expected at least 3 seeded categories, got %d", len(categories))
+	}
+
+	wantOrder := []string{"inferno", "fortis_colosseum", "fight_caves"}
+	for i, slug := range wantOrder {
+		if categories[i].Slug != slug {
+			t.Fatalf("category order mismatch at index %d: got %s want %s", i, categories[i].Slug, slug)
+		}
+		if categories[i].GroupName != "Minigames" {
+			t.Fatalf("expected Minigames group for %s, got %s", slug, categories[i].GroupName)
+		}
+		if categories[i].DisplayOrder != i+1 {
+			t.Fatalf("display order mismatch for %s: got %d want %d", slug, categories[i].DisplayOrder, i+1)
+		}
+	}
+}
+
+func TestPBGroupBundleMessageStateLifecycle(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+	if err := store.SaveGuild(ctx, &Guild{GuildID: "g1"}); err != nil {
+		t.Fatalf("save guild: %v", err)
+	}
+
+	now := time.Now().UTC()
+	state := &PBLeaderboardMessage{
+		GuildID:   "g1",
+		GroupName: "Minigames",
+		ChannelID: "ch-1",
+		MessageID: "msg-1",
+		UpdatedAt: now,
+	}
+	if err := store.UpsertPBGroupBundleMessage(ctx, state); err != nil {
+		t.Fatalf("upsert group state: %v", err)
+	}
+
+	loaded, err := store.GetPBGroupBundleMessage(ctx, "g1", "Minigames")
+	if err != nil {
+		t.Fatalf("get group state: %v", err)
+	}
+	if loaded.MessageID != "msg-1" {
+		t.Fatalf("message id mismatch: got %s", loaded.MessageID)
+	}
+
+	loaded.MessageID = "msg-2"
+	loaded.UpdatedAt = now.Add(time.Minute)
+	if err := store.UpsertPBGroupBundleMessage(ctx, loaded); err != nil {
+		t.Fatalf("update group state: %v", err)
+	}
+
+	all, err := store.ListPBGroupBundleMessagesByGuild(ctx, "g1")
+	if err != nil {
+		t.Fatalf("list group states: %v", err)
+	}
+	if len(all) != 1 || all[0].MessageID != "msg-2" {
+		t.Fatalf("expected one updated state with msg-2, got %+v", all)
+	}
+}

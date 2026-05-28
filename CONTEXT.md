@@ -10,9 +10,17 @@ This context defines the domain language for guild-managed competition features 
 A named leaderboard lane for one activity (for example `inferno`) with its own review queue and ranking.
 _Avoid_: Event type, boss category
 
-**Canonical PB Categories**:
-The currently canonical PB Category set is `inferno`, `fortis_colosseum`, and `fight_caves`.
-_Avoid_: Ad hoc category names, free-text category labels
+**Leaderboard Group**:
+A named bundle of PB Categories rendered together in one Discord message (for example `Minigames`).
+_Avoid_: Category, channel section
+
+**Group Bundle Message**:
+The single Discord message for one Leaderboard Group, containing group header text and all category embeds in that group.
+_Avoid_: Per-category message, proof post
+
+**Global Rebuild**:
+A recovery action that removes all PB group bundle messages for a guild and recreates them from persisted state.
+_Avoid_: Partial fix, single-message patch
 
 **PB Submission**:
 A user-submitted proof payload for a PB Category, containing proof media and optional entered time until moderation resolves it.
@@ -34,13 +42,13 @@ _Avoid_: Leaderboard feed, audit log
 A PB Submission that already has a final moderation decision and can no longer be decided again.
 _Avoid_: Pending submission, duplicate decision
 
-**PB Leaderboard Message**:
-The persistent embed message for a guild/category that displays the current top rankings.
-_Avoid_: Proof post, submission message
+**PB Leaderboard Message State**:
+Persisted mapping from guild and Leaderboard Group to the Group Bundle Message ID used for updates.
+_Avoid_: Per-category state, proof message
 
 ## Example Dialogue
 
 Dev: "A user posted a run in `pb-proofs`; is that already their PB?"  
 Domain expert: "No, that is a **PB Submission** in the **Proof Queue**. It becomes an **Accepted PB** only after moderator approval, and only if it is faster than their existing accepted time."  
 Dev: "So the public board updates from the accepted value, not from every submission?"  
-Domain expert: "Exactly. The **PB Leaderboard Message** reflects accepted fastest times per **PB Category**."
+Domain expert: "Exactly. The **Group Bundle Message** reflects accepted fastest times per **PB Category** within its **Leaderboard Group**."
