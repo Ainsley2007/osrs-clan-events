@@ -377,14 +377,14 @@ func (s *InitializerService) ensurePBLeaderboardMessages(ctx context.Context, gu
 		}
 
 		embed := &discordgo.MessageEmbed{
-			Title:       fmt.Sprintf("🏆 %s PB Leaderboard", category.DisplayName),
+			Title:       category.DisplayName,
 			Description: "No approved PBs yet.\n\nSubmit your proof with `/submit-pb` to get on the board.",
 			Color:       0xF97316,
 			Timestamp:   now.Format(time.RFC3339),
 			Footer: &discordgo.MessageEmbedFooter{
 				Text: "Last updated",
 			},
-			Image: &discordgo.MessageEmbedImage{
+			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: category.EmbedImageURL,
 			},
 		}

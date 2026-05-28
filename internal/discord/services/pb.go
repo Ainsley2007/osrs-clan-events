@@ -304,7 +304,6 @@ func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records
 	if len(records) == 0 {
 		description.WriteString("No approved PBs yet.\n\nSubmit your proof with `/submit-pb` to get on the board.")
 	} else {
-		description.WriteString("**Top 3**\n\n")
 		for i, record := range records {
 			rank := fmt.Sprintf("%d.", i+1)
 			switch i {
@@ -320,14 +319,14 @@ func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records
 	}
 
 	return &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("🏆 %s PB Leaderboard", category.DisplayName),
+		Title:       category.DisplayName,
 		Description: description.String(),
 		Color:       0xF97316,
 		Timestamp:   now.Format(time.RFC3339),
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: "Last updated",
 		},
-		Image: &discordgo.MessageEmbedImage{
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: category.EmbedImageURL,
 		},
 	}

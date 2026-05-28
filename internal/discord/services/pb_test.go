@@ -82,8 +82,8 @@ func TestBuildLeaderboardEmbed_ShowsTopThreeFastest(t *testing.T) {
 	if embed == nil {
 		t.Fatalf("embed is nil")
 	}
-	if embed.Image == nil || embed.Image.URL != category.EmbedImageURL {
-		t.Fatalf("image url mismatch: got %+v", embed.Image)
+	if embed.Thumbnail == nil || embed.Thumbnail.URL != category.EmbedImageURL {
+		t.Fatalf("thumbnail url mismatch: got %+v", embed.Thumbnail)
 	}
 	if embed.Footer == nil || embed.Footer.Text != "Last updated" {
 		t.Fatalf("expected last updated footer")
