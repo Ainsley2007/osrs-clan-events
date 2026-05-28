@@ -435,7 +435,11 @@ func (s *PBService) buildGroupEmbeds(ctx context.Context, guildID string, catego
 }
 
 func (s *PBService) buildGroupBundleContent(groupName string) string {
-	return groupName
+	name := strings.TrimSpace(groupName)
+	if strings.HasPrefix(name, "#") {
+		return name
+	}
+	return "# " + name
 }
 
 func (s *PBService) groupActiveCategories(ctx context.Context) ([]*pbCategoryGroup, error) {
@@ -523,8 +527,9 @@ func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records
 	if len(records) == 0 {
 		description.WriteString("No approved PBs yet.\n\nSubmit your proof with `/submit-pb` to get on the board.")
 	} else {
+		rankEmojis := []string{"🥇", "🥈", "🥉"}
 		for i, record := range records {
-			rank := fmt.Sprintf("%d.", i+1)
+			rank := rankEmojis[i]
 			description.WriteString(fmt.Sprintf("%s - %s - [Proof](%s) - %s\n", rank, record.TimeText, record.ProofURL, record.DisplayName))
 		}
 	}

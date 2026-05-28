@@ -110,6 +110,11 @@ func TestBuildLeaderboardEmbed_ShowsTopThreeFastest(t *testing.T) {
 		strings.Index(desc, "Bravo") < strings.Index(desc, "Charlie")) {
 		t.Fatalf("expected sorted order Alpha -> Bravo -> Charlie, got %q", desc)
 	}
+	for _, medal := range []string{"🥇", "🥈", "🥉"} {
+		if !strings.Contains(desc, medal) {
+			t.Fatalf("expected medal rank emoji %s in leaderboard: %q", medal, desc)
+		}
+	}
 }
 
 type mockPBStore struct {
@@ -231,7 +236,10 @@ func TestBuildGroupEmbeds_IncludesEmptyCategoriesAndDynamicCount(t *testing.T) {
 
 func TestBuildGroupBundleContent_UsesGroupNameHeader(t *testing.T) {
 	service := &PBService{}
-	if got := service.buildGroupBundleContent("Minigames"); got != "Minigames" {
-		t.Fatalf("expected group header content to be Minigames, got %q", got)
+	if got := service.buildGroupBundleContent("Minigames"); got != "# Minigames" {
+		t.Fatalf("expected markdown group header, got %q", got)
+	}
+	if got := service.buildGroupBundleContent("# Bosses"); got != "# Bosses" {
+		t.Fatalf("expected existing markdown prefix preserved, got %q", got)
 	}
 }
