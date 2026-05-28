@@ -264,9 +264,18 @@ func (s *SnapshotService) fetchMetricValueForEvent(ctx context.Context, rsn stri
 }
 
 type FailedAccountUpdate struct {
-	RSN     string
-	GuildID string // guild the account/participant belongs to
-	Error   error
+	AccountID     int64
+	DiscordUserID string
+	RSN           string
+	GuildID       string // guild the account/participant belongs to
+	Error         error
+}
+
+type SuccessfulAccountUpdate struct {
+	AccountID     int64
+	DiscordUserID string
+	RSN           string
+	GuildID       string
 }
 
 func (s *SnapshotService) UpdateSnapshotsForEvent(ctx context.Context, event *database.Event) ([]FailedAccountUpdate, error) {
@@ -286,9 +295,11 @@ func (s *SnapshotService) UpdateSnapshotsForEvent(ctx context.Context, event *da
 		currentValue, err := s.fetchMetricValueForEvent(ctx, account.RSN, event)
 		if err != nil {
 			failedUpdates = append(failedUpdates, FailedAccountUpdate{
-				RSN:     account.RSN,
-				GuildID: event.GuildID,
-				Error:   err,
+				AccountID:     account.ID,
+				DiscordUserID: account.DiscordUserID,
+				RSN:           account.RSN,
+				GuildID:       event.GuildID,
+				Error:         err,
 			})
 			continue
 		}
@@ -310,10 +321,11 @@ type snapData struct {
 // UpdateSnapshotsForEventsResult contains the result of updating snapshots with timing information.
 // FetchedStats is populated so rollover can reuse the same stats for initial snapshots of new events (1 API call per account).
 type UpdateSnapshotsForEventsResult struct {
-	FailedUpdates []FailedAccountUpdate
-	TotalAccounts int
-	Duration      time.Duration
-	FetchedStats  map[int64]*osrs.PlayerStats // key = account ID
+	FailedUpdates   []FailedAccountUpdate
+	SuccessfulPairs []SuccessfulAccountUpdate
+	TotalAccounts   int
+	Duration        time.Duration
+	FetchedStats    map[int64]*osrs.PlayerStats // key = account ID
 }
 
 // UpdateSnapshotsForEvents updates snapshots for multiple events efficiently by fetching player stats once per account.
@@ -331,10 +343,11 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 	startTime := time.Now()
 	if len(events) == 0 {
 		return &UpdateSnapshotsForEventsResult{
-			FailedUpdates: nil,
-			TotalAccounts: 0,
-			Duration:      time.Since(startTime),
-			FetchedStats:  nil,
+			FailedUpdates:   nil,
+			SuccessfulPairs: nil,
+			TotalAccounts:   0,
+			Duration:        time.Since(startTime),
+			FetchedStats:    nil,
 		}, nil
 	}
 
@@ -403,6 +416,7 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 
 	// 3) Fetch stats once per account; update existing snapshots or create new ones; collect stats for rollover reuse
 	fetchedStats := make(map[int64]*osrs.PlayerStats, len(accountSnapshotsMap))
+	successfulPairs := make([]SuccessfulAccountUpdate, 0, len(accountSnapshotsMap))
 	for accountID, accSnap := range accountSnapshotsMap {
 		stats, err := s.osrsClient.GetPlayerStats(ctx, accSnap.account.RSN)
 		if err != nil {
@@ -413,23 +427,41 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 				if _, ok := seen[gid]; !ok {
 					seen[gid] = struct{}{}
 					failedUpdates = append(failedUpdates, FailedAccountUpdate{
-						RSN:     accSnap.account.RSN,
-						GuildID: gid,
-						Error:   err,
+						AccountID:     accSnap.account.ID,
+						DiscordUserID: accSnap.account.DiscordUserID,
+						RSN:           accSnap.account.RSN,
+						GuildID:       gid,
+						Error:         err,
 					})
 				}
 			}
 			continue
 		}
 		fetchedStats[accountID] = stats
+		seenSuccessGuild := make(map[string]struct{})
+		for _, sd := range accSnap.snapshots {
+			gid := sd.event.GuildID
+			if _, ok := seenSuccessGuild[gid]; ok {
+				continue
+			}
+			seenSuccessGuild[gid] = struct{}{}
+			successfulPairs = append(successfulPairs, SuccessfulAccountUpdate{
+				AccountID:     accSnap.account.ID,
+				DiscordUserID: accSnap.account.DiscordUserID,
+				RSN:           accSnap.account.RSN,
+				GuildID:       gid,
+			})
+		}
 
 		for _, sd := range accSnap.snapshots {
 			value, err := s.extractMetricValueFromStats(stats, sd.event)
 			if err != nil {
 				failedUpdates = append(failedUpdates, FailedAccountUpdate{
-					RSN:     accSnap.account.RSN,
-					GuildID: sd.event.GuildID,
-					Error:   fmt.Errorf("failed to extract metric for event %d: %w", sd.event.ID, err),
+					AccountID:     accSnap.account.ID,
+					DiscordUserID: accSnap.account.DiscordUserID,
+					RSN:           accSnap.account.RSN,
+					GuildID:       sd.event.GuildID,
+					Error:         fmt.Errorf("failed to extract metric for event %d: %w", sd.event.ID, err),
 				})
 				continue
 			}
@@ -437,9 +469,10 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 			if sd.snapshot != nil {
 				if err := s.store.UpdateSnapshotCurrentValue(ctx, sd.snapshot.ID, value); err != nil {
 					return &UpdateSnapshotsForEventsResult{
-						FailedUpdates: failedUpdates,
-						TotalAccounts: len(accountSnapshotsMap),
-						Duration:      time.Since(startTime),
+						FailedUpdates:   failedUpdates,
+						SuccessfulPairs: successfulPairs,
+						TotalAccounts:   len(accountSnapshotsMap),
+						Duration:        time.Since(startTime),
 					}, fmt.Errorf("failed to update snapshot for account %d: %w", accountID, err)
 				}
 			} else {
@@ -451,9 +484,10 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 				}
 				if err := s.store.CreateSnapshot(ctx, snapshot); err != nil {
 					return &UpdateSnapshotsForEventsResult{
-						FailedUpdates: failedUpdates,
-						TotalAccounts: len(accountSnapshotsMap),
-						Duration:      time.Since(startTime),
+						FailedUpdates:   failedUpdates,
+						SuccessfulPairs: successfulPairs,
+						TotalAccounts:   len(accountSnapshotsMap),
+						Duration:        time.Since(startTime),
 					}, fmt.Errorf("failed to create snapshot for account %d, event %d: %w", accountID, sd.event.ID, err)
 				}
 			}
@@ -476,10 +510,11 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 	}
 
 	return &UpdateSnapshotsForEventsResult{
-		FailedUpdates: failedUpdates,
-		TotalAccounts: len(accountSnapshotsMap),
-		Duration:      time.Since(startTime),
-		FetchedStats:  fetchedStats,
+		FailedUpdates:   failedUpdates,
+		SuccessfulPairs: successfulPairs,
+		TotalAccounts:   len(accountSnapshotsMap),
+		Duration:        time.Since(startTime),
+		FetchedStats:    fetchedStats,
 	}, nil
 }
 

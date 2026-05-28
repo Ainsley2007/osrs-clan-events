@@ -2,10 +2,15 @@ package scheduler
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"time"
 
 	"osrs-events/internal/database"
+	"osrs-events/internal/discord"
+	"osrs-events/internal/discord/services"
+	"osrs-events/internal/osrs"
 )
 
 func (s *Scheduler) runHourlyUpdates() {
@@ -76,24 +81,103 @@ func (s *Scheduler) updateActiveSnapshots() {
 		}
 	}
 
-	// TODO: Log 404 errors to the log channel with proper rate limiting
-	// For now, disabled to prevent spam every hour
-	// See: https://github.com/Ainsley2007/osrs-clan-events/issues/XXX
-	// Disabled: discord.SendAccountNotFoundLog() - will re-enable with DM notifications + rate limiting
-	// for _, failed := range result.FailedUpdates {
-	// 	var notFoundErr *osrs.PlayerNotFoundError
-	// 	if !errors.As(failed.Error, &notFoundErr) {
-	// 		continue
-	// 	}
-	// 	guild := guildsMap[failed.GuildID]
-	// 	if guild == nil || guild.LogChannelID == "" {
-	// 		continue
-	// 	}
-	// 	discord.SendAccountNotFoundLog(s.session, guild.LogChannelID, failed.RSN)
-	// }
+	now := time.Now().UTC()
+	s.processMissingAccountNotifications(ctx, now, result)
+	s.sendWeeklyMissingAccountSummaries(ctx, now, guildsMap)
 
 	for guildID := range guildsMap {
 		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw")
 		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw")
 	}
+}
+
+func (s *Scheduler) processMissingAccountNotifications(ctx context.Context, now time.Time, result *services.UpdateSnapshotsForEventsResult) {
+	for _, failed := range result.FailedUpdates {
+		var notFoundErr *osrs.PlayerNotFoundError
+		if !errors.As(failed.Error, &notFoundErr) {
+			continue
+		}
+		if failed.AccountID == 0 || failed.GuildID == "" {
+			continue
+		}
+
+		notification := &database.MissingAccountNotification{
+			AccountID:     failed.AccountID,
+			DiscordUserID: failed.DiscordUserID,
+			GuildID:       failed.GuildID,
+			RSN:           failed.RSN,
+			FirstFailedAt: now,
+			LastFailedAt:  now,
+		}
+		if err := s.store.UpsertMissingAccountNotificationFailure(ctx, notification); err != nil {
+			log.Printf("Failed to upsert missing account notification for account %d guild %s: %v", failed.AccountID, failed.GuildID, err)
+		}
+	}
+
+	pendingDMs, err := s.store.GetPendingMissingAccountNotifications(ctx)
+	if err != nil {
+		log.Printf("Failed to load pending missing account DMs: %v", err)
+	} else {
+		for _, pending := range pendingDMs {
+			if err := discord.SendAccountNotFoundDM(s.session, pending.DiscordUserID, pending.GuildID, pending.RSN); err != nil {
+				log.Printf("Failed to send missing account DM for account %d (%s): %v", pending.AccountID, pending.RSN, err)
+				continue
+			}
+			if err := s.store.MarkMissingAccountNotificationDMSent(ctx, pending.ID, now); err != nil {
+				log.Printf("Failed to mark missing account DM as sent for notification %d: %v", pending.ID, err)
+			}
+		}
+	}
+
+	for _, success := range result.SuccessfulPairs {
+		if success.AccountID == 0 || success.GuildID == "" {
+			continue
+		}
+		if err := s.store.ResolveMissingAccountNotification(ctx, success.AccountID, success.GuildID, now); err != nil {
+			log.Printf("Failed to resolve missing account notification for account %d guild %s: %v", success.AccountID, success.GuildID, err)
+		}
+	}
+}
+
+func (s *Scheduler) sendWeeklyMissingAccountSummaries(ctx context.Context, now time.Time, guildsMap map[string]*database.Guild) {
+	year, week := now.ISOWeek()
+	weekKey := formatYearWeekKey(year, week)
+
+	for guildID, guild := range guildsMap {
+		if guild == nil || guild.LogChannelID == "" {
+			continue
+		}
+
+		shouldSend, err := s.store.ShouldSendMissingAccountWeeklySummary(ctx, guildID, weekKey)
+		if err != nil {
+			log.Printf("Failed to check weekly missing account summary state for guild %s: %v", guildID, err)
+			continue
+		}
+		if !shouldSend {
+			continue
+		}
+
+		unresolved, err := s.store.GetUnresolvedMissingAccountNotificationsByGuild(ctx, guildID)
+		if err != nil {
+			log.Printf("Failed to load unresolved missing account notifications for guild %s: %v", guildID, err)
+			continue
+		}
+		if len(unresolved) == 0 {
+			continue
+		}
+
+		rsns := make([]string, 0, len(unresolved))
+		for _, notification := range unresolved {
+			rsns = append(rsns, notification.RSN)
+		}
+
+		discord.SendWeeklyMissingAccountsSummary(s.session, guild.LogChannelID, len(unresolved), rsns)
+		if err := s.store.MarkMissingAccountWeeklySummarySent(ctx, guildID, weekKey, now); err != nil {
+			log.Printf("Failed to mark weekly missing account summary as sent for guild %s: %v", guildID, err)
+		}
+	}
+}
+
+func formatYearWeekKey(year, week int) string {
+	return fmt.Sprintf("%04d-%02d", year, week)
 }

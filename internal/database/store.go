@@ -71,6 +71,18 @@ type SnapshotWithAccount struct {
 	Account  *Account
 }
 
+type MissingAccountNotification struct {
+	ID            int64
+	AccountID     int64
+	DiscordUserID string
+	GuildID       string
+	RSN           string
+	FirstFailedAt time.Time
+	LastFailedAt  time.Time
+	DMSentAt      *time.Time
+	ResolvedAt    *time.Time
+}
+
 type ParticipantPointUpdate struct {
 	DiscordUserID string
 	GuildID       string
@@ -130,6 +142,13 @@ type Store interface {
 	GetSnapshotsByEvent(ctx context.Context, eventID int64) ([]*Snapshot, error)
 	UpdateSnapshotCurrentValue(ctx context.Context, snapshotID int64, currentValue int64) error
 	GetSnapshotsWithAccounts(ctx context.Context, eventID int64) ([]*SnapshotWithAccount, error)
+	UpsertMissingAccountNotificationFailure(ctx context.Context, notification *MissingAccountNotification) error
+	GetPendingMissingAccountNotifications(ctx context.Context) ([]*MissingAccountNotification, error)
+	MarkMissingAccountNotificationDMSent(ctx context.Context, notificationID int64, sentAt time.Time) error
+	ResolveMissingAccountNotification(ctx context.Context, accountID int64, guildID string, resolvedAt time.Time) error
+	GetUnresolvedMissingAccountNotificationsByGuild(ctx context.Context, guildID string) ([]*MissingAccountNotification, error)
+	ShouldSendMissingAccountWeeklySummary(ctx context.Context, guildID, weekKey string) (bool, error)
+	MarkMissingAccountWeeklySummarySent(ctx context.Context, guildID, weekKey string, sentAt time.Time) error
 
 	UpdateParticipantPoints(ctx context.Context, updates []*ParticipantPointUpdate) error
 

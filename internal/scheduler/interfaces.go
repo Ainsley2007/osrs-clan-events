@@ -16,6 +16,13 @@ type Store interface {
 	GetAllActiveEvents(ctx context.Context) ([]*database.Event, error)
 	GetGuild(ctx context.Context, guildID string) (*database.Guild, error)
 	DeactivateEvent(ctx context.Context, eventID int64) error
+	UpsertMissingAccountNotificationFailure(ctx context.Context, notification *database.MissingAccountNotification) error
+	GetPendingMissingAccountNotifications(ctx context.Context) ([]*database.MissingAccountNotification, error)
+	MarkMissingAccountNotificationDMSent(ctx context.Context, notificationID int64, sentAt time.Time) error
+	ResolveMissingAccountNotification(ctx context.Context, accountID int64, guildID string, resolvedAt time.Time) error
+	GetUnresolvedMissingAccountNotificationsByGuild(ctx context.Context, guildID string) ([]*database.MissingAccountNotification, error)
+	ShouldSendMissingAccountWeeklySummary(ctx context.Context, guildID, weekKey string) (bool, error)
+	MarkMissingAccountWeeklySummarySent(ctx context.Context, guildID, weekKey string, sentAt time.Time) error
 }
 
 type EventService interface {

@@ -2,6 +2,7 @@ package discord
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -93,6 +94,9 @@ func SendNewCompetitionStartedLog(s *discordgo.Session, channelID string, eventT
 }
 
 func SendAccountNotFoundLog(s *discordgo.Session, channelID string, rsn string) {
+	if s == nil {
+		return
+	}
 	if channelID == "" {
 		return
 	}
@@ -100,6 +104,73 @@ func SendAccountNotFoundLog(s *discordgo.Session, channelID string, rsn string) 
 	embed := &discordgo.MessageEmbed{
 		Title:       "⚠️ Account Not Found",
 		Description: fmt.Sprintf("Failed to fetch stats for account **%s**.\nThe account may have been renamed or deleted from the OSRS Hiscores.", rsn),
+		Color:       0xFF9900,
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+	}
+
+	s.ChannelMessageSendEmbed(channelID, embed)
+}
+
+func SendAccountNotFoundDM(s *discordgo.Session, discordUserID, guildID, rsn string) error {
+	if s == nil {
+		return nil
+	}
+	if discordUserID == "" || rsn == "" {
+		return nil
+	}
+
+	dmChannel, err := s.UserChannelCreate(discordUserID)
+	if err != nil {
+		return err
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: "Action Required: OSRS Account Not Found",
+		Description: fmt.Sprintf(
+			"We couldn't fetch stats for **%s** in one of your competitions.\n\nThis usually means the account was renamed or removed from Hiscores.\nPlease use `/rename` in your server to update this account name.\n\nServer ID: `%s`",
+			rsn,
+			guildID,
+		),
+		Color:     0xFF9900,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	_, err = s.ChannelMessageSendEmbed(dmChannel.ID, embed)
+	return err
+}
+
+func SendWeeklyMissingAccountsSummary(s *discordgo.Session, channelID string, notifications int, rsns []string) {
+	if s == nil {
+		return
+	}
+	if channelID == "" || notifications == 0 {
+		return
+	}
+
+	unique := make(map[string]struct{}, len(rsns))
+	for _, rsn := range rsns {
+		unique[rsn] = struct{}{}
+	}
+	uniqueRSNs := make([]string, 0, len(unique))
+	for rsn := range unique {
+		uniqueRSNs = append(uniqueRSNs, rsn)
+	}
+	sort.Strings(uniqueRSNs)
+
+	rsnPreview := strings.Join(uniqueRSNs, ", ")
+	if len(rsnPreview) > 900 {
+		rsnPreview = rsnPreview[:900] + "..."
+	}
+
+	description := fmt.Sprintf(
+		"Unresolved missing accounts this week: **%d**\nUnique RSNs: **%d**\n\n%s",
+		notifications,
+		len(uniqueRSNs),
+		rsnPreview,
+	)
+	embed := &discordgo.MessageEmbed{
+		Title:       "Weekly Missing Accounts Summary",
+		Description: description,
 		Color:       0xFF9900,
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}

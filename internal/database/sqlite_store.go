@@ -105,6 +105,32 @@ func (s *SQLiteStore) init() error {
 			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 			FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 		);`,
+		`CREATE TABLE IF NOT EXISTS missing_account_notifications (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			account_id INTEGER NOT NULL,
+			discord_user_id TEXT NOT NULL,
+			guild_id TEXT NOT NULL,
+			rsn TEXT NOT NULL,
+			first_failed_at DATETIME NOT NULL,
+			last_failed_at DATETIME NOT NULL,
+			dm_sent_at DATETIME,
+			resolved_at DATETIME,
+			FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
+		);`,
+		`CREATE TABLE IF NOT EXISTS missing_account_weekly_summaries (
+			guild_id TEXT PRIMARY KEY,
+			last_sent_week TEXT NOT NULL,
+			last_sent_at DATETIME NOT NULL,
+			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
+		);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_missing_account_unresolved
+			ON missing_account_notifications(account_id, guild_id)
+			WHERE resolved_at IS NULL;`,
+		`CREATE INDEX IF NOT EXISTS idx_missing_account_notifications_guild_resolved
+			ON missing_account_notifications(guild_id, resolved_at);`,
+		`CREATE INDEX IF NOT EXISTS idx_missing_account_notifications_pending_dm
+			ON missing_account_notifications(dm_sent_at, resolved_at);`,
 		`CREATE TABLE IF NOT EXISTS donations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			guild_id TEXT NOT NULL,

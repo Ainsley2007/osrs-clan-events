@@ -12,8 +12,8 @@ import (
 
 // mockCompletionStore records calls for completion tests.
 type mockCompletionStore struct {
-	getGuildFn       func(ctx context.Context, guildID string) (*database.Guild, error)
-	deactivateCount  int
+	getGuildFn      func(ctx context.Context, guildID string) (*database.Guild, error)
+	deactivateCount int
 }
 
 func (m *mockCompletionStore) GetExpiredActiveEvents(context.Context) ([]*database.Event, error) {
@@ -36,6 +36,27 @@ func (m *mockCompletionStore) GetGuild(ctx context.Context, guildID string) (*da
 }
 func (m *mockCompletionStore) DeactivateEvent(context.Context, int64) error {
 	m.deactivateCount++
+	return nil
+}
+func (m *mockCompletionStore) UpsertMissingAccountNotificationFailure(context.Context, *database.MissingAccountNotification) error {
+	return nil
+}
+func (m *mockCompletionStore) GetPendingMissingAccountNotifications(context.Context) ([]*database.MissingAccountNotification, error) {
+	return nil, nil
+}
+func (m *mockCompletionStore) MarkMissingAccountNotificationDMSent(context.Context, int64, time.Time) error {
+	return nil
+}
+func (m *mockCompletionStore) ResolveMissingAccountNotification(context.Context, int64, string, time.Time) error {
+	return nil
+}
+func (m *mockCompletionStore) GetUnresolvedMissingAccountNotificationsByGuild(context.Context, string) ([]*database.MissingAccountNotification, error) {
+	return nil, nil
+}
+func (m *mockCompletionStore) ShouldSendMissingAccountWeeklySummary(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (m *mockCompletionStore) MarkMissingAccountWeeklySummarySent(context.Context, string, string, time.Time) error {
 	return nil
 }
 
@@ -80,7 +101,7 @@ func (m *mockCompletionEventService) StartNewEvent(context.Context, string, stri
 }
 func (m *mockCompletionEventService) StartNewEventFromRollover(_ context.Context, guildID, eventType string, startTime time.Time, _ map[int64]*osrs.PlayerStats) (*services.StartEventResult, error) {
 	return &services.StartEventResult{
-		Event:   &database.Event{ID: 2, GuildID: guildID, Type: eventType, StartTime: startTime, MetricJsonID: "Test"},
+		Event:      &database.Event{ID: 2, GuildID: guildID, Type: eventType, StartTime: startTime, MetricJsonID: "Test"},
 		MetricName: "Test",
 	}, nil
 }
