@@ -253,13 +253,32 @@ func (s *SQLiteStore) seedPBCategories() error {
 			is_active = excluded.is_active,
 			embed_image_url = excluded.embed_image_url`
 
-	if _, err := s.db.Exec(query,
-		"inferno",
-		"Inferno",
-		true,
-		"https://images-ext-1.discordapp.net/external/X8UMtpv21fsvGtd_bu-JO1YOJNZgd5fxnmwlCMxWuvg/%3F2d222/https/oldschool.runescape.wiki/images/thumb/TzKal-Zuk.png/138px-TzKal-Zuk.png?format=webp&quality=lossless&width=276&height=300",
-	); err != nil {
-		return fmt.Errorf("failed to seed pb categories: %w", err)
+	seeds := []struct {
+		slug        string
+		displayName string
+		imageURL    string
+	}{
+		{
+			slug:        "inferno",
+			displayName: "The Inferno",
+			imageURL:    "https://images-ext-1.discordapp.net/external/X8UMtpv21fsvGtd_bu-JO1YOJNZgd5fxnmwlCMxWuvg/%3F2d222/https/oldschool.runescape.wiki/images/thumb/TzKal-Zuk.png/138px-TzKal-Zuk.png?format=webp&quality=lossless&width=276&height=300",
+		},
+		{
+			slug:        "fortis_colosseum",
+			displayName: "Fortis Colosseum",
+			imageURL:    "https://images-ext-1.discordapp.net/external/CGjkbhxg5A4Mnqts0bl_dU3KuhjdN14K5ZgBzdQ-6CY/%3F91250/https/oldschool.runescape.wiki/images/thumb/Sol_Heredit.png/104px-Sol_Heredit.png?format=webp&quality=lossless&width=208&height=300",
+		},
+		{
+			slug:        "fight_caves",
+			displayName: "Fight Caves",
+			imageURL:    "https://images-ext-1.discordapp.net/external/5DpjS_0B3SGLKRmBZeR8Yn_PJIvXNtcI-yhqN_r11_k/%3F87507/https/oldschool.runescape.wiki/images/thumb/TzTok-Jad.png/135px-TzTok-Jad.png?format=webp&quality=lossless&width=270&height=296",
+		},
+	}
+
+	for _, seed := range seeds {
+		if _, err := s.db.Exec(query, seed.slug, seed.displayName, true, seed.imageURL); err != nil {
+			return fmt.Errorf("failed to seed pb category %s: %w", seed.slug, err)
+		}
 	}
 	return nil
 }

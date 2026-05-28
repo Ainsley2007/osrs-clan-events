@@ -10,6 +10,10 @@ This context defines the domain language for guild-managed competition features 
 A named leaderboard lane for one activity (for example `inferno`) with its own review queue and ranking.
 _Avoid_: Event type, boss category
 
+**Canonical PB Categories**:
+The currently canonical PB Category set is `inferno`, `fortis_colosseum`, and `fight_caves`.
+_Avoid_: Ad hoc category names, free-text category labels
+
 **PB Submission**:
 A user-submitted proof payload for a PB Category, containing proof media and optional entered time until moderation resolves it.
 _Avoid_: Run record, final PB

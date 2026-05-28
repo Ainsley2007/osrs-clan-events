@@ -23,7 +23,8 @@ func (b *Bot) submitPBCommand() Command {
 					Required:    true,
 					Choices: []*discordgo.ApplicationCommandOptionChoice{
 						{Name: "Inferno", Value: "inferno"},
-						{Name: "Vorkath", Value: "vorkath"},
+						{Name: "Fortis Colosseum", Value: "fortis_colosseum"},
+						{Name: "Fight Caves", Value: "fight_caves"},
 					},
 				},
 				{
