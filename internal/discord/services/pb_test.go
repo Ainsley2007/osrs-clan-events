@@ -64,6 +64,67 @@ func TestParsePBTimeStrict(t *testing.T) {
 	}
 }
 
+func TestRankPBLeaderboardPlaceRows_TiedFirstPlaceShowsFourPlayers(t *testing.T) {
+	now := time.Now().UTC()
+	records := []*database.PBRecord{
+		{DisplayName: "Alice", TimeText: "01:00.00", TimeCentiseconds: 6000, UpdatedAt: now},
+		{DisplayName: "Bob", TimeText: "01:00.00", TimeCentiseconds: 6000, UpdatedAt: now.Add(time.Minute)},
+		{DisplayName: "Charlie", TimeText: "01:01.00", TimeCentiseconds: 6100, UpdatedAt: now.Add(2 * time.Minute)},
+		{DisplayName: "Diana", TimeText: "01:02.00", TimeCentiseconds: 6200, UpdatedAt: now.Add(3 * time.Minute)},
+	}
+
+	rows := RankPBLeaderboardPlaceRows(records)
+	if len(rows) != 4 {
+		t.Fatalf("expected 4 visible rows, got %d", len(rows))
+	}
+	if rows[0].place != 1 || rows[1].place != 1 || rows[2].place != 2 || rows[3].place != 3 {
+		t.Fatalf("unexpected place assignment: %+v", rows)
+	}
+	if rows[0].record.DisplayName != "Alice" || rows[1].record.DisplayName != "Bob" {
+		t.Fatalf("expected Alice before Bob within first-place tie")
+	}
+}
+
+func TestRankPBLeaderboardPlaceRows_AllTiedFirstShowsOnlyGold(t *testing.T) {
+	now := time.Now().UTC()
+	records := []*database.PBRecord{
+		{DisplayName: "Alice", TimeCentiseconds: 6000, UpdatedAt: now},
+		{DisplayName: "Bob", TimeCentiseconds: 6000, UpdatedAt: now.Add(time.Minute)},
+		{DisplayName: "Charlie", TimeCentiseconds: 6000, UpdatedAt: now.Add(2 * time.Minute)},
+	}
+
+	rows := RankPBLeaderboardPlaceRows(records)
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 visible rows, got %d", len(rows))
+	}
+	for _, row := range rows {
+		if row.place != 1 {
+			t.Fatalf("expected all rows to be first place, got place %d", row.place)
+		}
+	}
+}
+
+func TestBuildLeaderboardEmbed_TiedFirstPlaceUsesDuplicateGoldMedals(t *testing.T) {
+	service := &PBService{}
+	category := &database.PBCategory{Slug: "inferno", DisplayName: "The Inferno"}
+	now := time.Now().UTC()
+	records := []*database.PBRecord{
+		{DisplayName: "Alice", TimeText: "01:00.00", TimeCentiseconds: 6000, ProofURL: "https://proof-a", UpdatedAt: now},
+		{DisplayName: "Bob", TimeText: "01:00.00", TimeCentiseconds: 6000, ProofURL: "https://proof-b", UpdatedAt: now.Add(time.Minute)},
+		{DisplayName: "Charlie", TimeText: "01:01.00", TimeCentiseconds: 6100, ProofURL: "https://proof-c", UpdatedAt: now.Add(2 * time.Minute)},
+		{DisplayName: "Diana", TimeText: "01:02.00", TimeCentiseconds: 6200, ProofURL: "https://proof-d", UpdatedAt: now.Add(3 * time.Minute)},
+	}
+
+	embed := service.buildLeaderboardEmbed(category, records)
+	desc := embed.Description
+	if strings.Count(desc, "🥇") != 2 {
+		t.Fatalf("expected two gold medals, got description %q", desc)
+	}
+	if !strings.Contains(desc, "🥈") || !strings.Contains(desc, "🥉") {
+		t.Fatalf("expected silver and bronze medals in description: %q", desc)
+	}
+}
+
 func TestBuildLeaderboardEmbed_ShowsTopThreeFastest(t *testing.T) {
 	service := &PBService{}
 	category := &database.PBCategory{
@@ -80,7 +141,7 @@ func TestBuildLeaderboardEmbed_ShowsTopThreeFastest(t *testing.T) {
 		{DisplayName: "Delta", TimeText: "01:10.00", TimeCentiseconds: 7000, UpdatedAt: now},
 	}
 
-	embed := service.buildLeaderboardEmbed(category, records[:3])
+	embed := service.buildLeaderboardEmbed(category, records)
 	if embed == nil {
 		t.Fatalf("embed is nil")
 	}
@@ -102,6 +163,9 @@ func TestBuildLeaderboardEmbed_ShowsTopThreeFastest(t *testing.T) {
 		if !strings.Contains(desc, name) {
 			t.Fatalf("expected name %q in leaderboard: %q", name, desc)
 		}
+	}
+	if strings.Contains(desc, "Delta") {
+		t.Fatalf("expected 4th place player excluded from top-three places: %q", desc)
 	}
 	if !strings.Contains(desc, "[Proof](") {
 		t.Fatalf("expected proof links in leaderboard: %q", desc)
@@ -146,13 +210,10 @@ func (m *mockPBStore) ApprovePBSubmission(context.Context, int64, string, time.T
 func (m *mockPBStore) RejectPBSubmission(context.Context, int64, string, time.Time) error {
 	return fmt.Errorf("not implemented")
 }
-func (m *mockPBStore) GetPBSubmission(context.Context, int64) (*database.PBSubmission, error) {
-	return nil, fmt.Errorf("not implemented")
-}
 func (m *mockPBStore) UpsertPBRecordIfBetter(context.Context, *database.PBRecord) (bool, error) {
 	return false, fmt.Errorf("not implemented")
 }
-func (m *mockPBStore) GetTopPBRecords(_ context.Context, _ string, categorySlug string, _ int) ([]*database.PBRecord, error) {
+func (m *mockPBStore) GetPBRecordsByCategory(_ context.Context, _ string, categorySlug string) ([]*database.PBRecord, error) {
 	if records, ok := m.topRecordsBySlug[categorySlug]; ok {
 		return records, nil
 	}

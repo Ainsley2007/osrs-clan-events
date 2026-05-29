@@ -217,9 +217,8 @@ type Store interface {
 	GetPendingPBSubmissionByProofMessageID(ctx context.Context, guildID, proofMessageID string) (*PBSubmission, error)
 	ApprovePBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error
 	RejectPBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error
-	GetPBSubmission(ctx context.Context, submissionID int64) (*PBSubmission, error)
 	UpsertPBRecordIfBetter(ctx context.Context, record *PBRecord) (bool, error)
-	GetTopPBRecords(ctx context.Context, guildID, categorySlug string, limit int) ([]*PBRecord, error)
+	GetPBRecordsByCategory(ctx context.Context, guildID, categorySlug string) ([]*PBRecord, error)
 	GetPBGroupBundleMessage(ctx context.Context, guildID, groupName string) (*PBLeaderboardMessage, error)
 	UpsertPBGroupBundleMessage(ctx context.Context, message *PBLeaderboardMessage) error
 	ListPBGroupBundleMessagesByGuild(ctx context.Context, guildID string) ([]*PBLeaderboardMessage, error)

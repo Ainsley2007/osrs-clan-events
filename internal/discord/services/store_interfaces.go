@@ -115,9 +115,8 @@ type PBStore interface {
 	GetPendingPBSubmissionByProofMessageID(ctx context.Context, guildID, proofMessageID string) (*database.PBSubmission, error)
 	ApprovePBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error
 	RejectPBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error
-	GetPBSubmission(ctx context.Context, submissionID int64) (*database.PBSubmission, error)
 	UpsertPBRecordIfBetter(ctx context.Context, record *database.PBRecord) (bool, error)
-	GetTopPBRecords(ctx context.Context, guildID, categorySlug string, limit int) ([]*database.PBRecord, error)
+	GetPBRecordsByCategory(ctx context.Context, guildID, categorySlug string) ([]*database.PBRecord, error)
 	GetPBGroupBundleMessage(ctx context.Context, guildID, groupName string) (*database.PBLeaderboardMessage, error)
 	UpsertPBGroupBundleMessage(ctx context.Context, message *database.PBLeaderboardMessage) error
 	ListPBGroupBundleMessagesByGuild(ctx context.Context, guildID string) ([]*database.PBLeaderboardMessage, error)

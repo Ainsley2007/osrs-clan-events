@@ -151,17 +151,6 @@ func (s *SQLiteStore) GetPendingPBSubmissionByProofMessageID(ctx context.Context
 	return s.getPBSubmissionWithArgs(ctx, query, guildID, proofMessageID, pbSubmissionStatusPending)
 }
 
-func (s *SQLiteStore) GetPBSubmission(ctx context.Context, submissionID int64) (*PBSubmission, error) {
-	query := `
-		SELECT
-			id, guild_id, category_slug, discord_user_id, display_name,
-			time_text, time_centiseconds, proof_url, proof_message_id, status,
-			reviewed_by_discord_id, reviewed_at, created_at, updated_at
-		FROM pb_submissions
-		WHERE id = ?`
-	return s.getPBSubmissionWithArgs(ctx, query, submissionID)
-}
-
 func (s *SQLiteStore) ApprovePBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error {
 	return s.updatePBSubmissionStatus(ctx, submissionID, pbSubmissionStatusAccepted, reviewerDiscordID, reviewedAt)
 }
@@ -269,18 +258,17 @@ func (s *SQLiteStore) UpsertPBRecordIfBetter(ctx context.Context, record *PBReco
 	return true, nil
 }
 
-func (s *SQLiteStore) GetTopPBRecords(ctx context.Context, guildID, categorySlug string, limit int) ([]*PBRecord, error) {
+func (s *SQLiteStore) GetPBRecordsByCategory(ctx context.Context, guildID, categorySlug string) ([]*PBRecord, error) {
 	query := `
 		SELECT
 			id, guild_id, category_slug, discord_user_id, display_name,
 			time_text, time_centiseconds, proof_submission_id, proof_url, updated_at, created_at
 		FROM pb_records
 		WHERE guild_id = ? AND category_slug = ?
-		ORDER BY time_centiseconds ASC, updated_at ASC
-		LIMIT ?`
-	rows, err := s.db.QueryContext(ctx, query, guildID, categorySlug, limit)
+		ORDER BY time_centiseconds ASC, updated_at ASC`
+	rows, err := s.db.QueryContext(ctx, query, guildID, categorySlug)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query top pb records: %w", err)
+		return nil, fmt.Errorf("failed to query pb records: %w", err)
 	}
 	defer rows.Close()
 

@@ -144,7 +144,7 @@ func TestUpsertPBRecordIfBetter(t *testing.T) {
 		t.Fatalf("expected faster time to update record")
 	}
 
-	records, err := store.GetTopPBRecords(ctx, "g1", "inferno", 3)
+	records, err := store.GetPBRecordsByCategory(ctx, "g1", "inferno")
 	if err != nil {
 		t.Fatalf("get top records: %v", err)
 	}
@@ -168,21 +168,51 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActivePBCategories returned error: %v", err)
 	}
-	if len(categories) < 3 {
-		t.Fatalf("expected at least 3 seeded categories, got %d", len(categories))
+	if len(categories) != 11 {
+		t.Fatalf("expected 11 seeded categories, got %d", len(categories))
 	}
 
-	wantOrder := []string{"inferno", "fortis_colosseum", "fight_caves"}
+	wantOrder := []string{
+		"inferno", "fortis_colosseum", "fight_caves",
+		"duke_sucellus", "duke_sucellus_awakened",
+		"the_leviathan", "the_leviathan_awakened",
+		"vardorvis", "vardorvis_awakened",
+		"the_whisperer", "the_whisperer_awakened",
+	}
 	for i, slug := range wantOrder {
 		if categories[i].Slug != slug {
 			t.Fatalf("category order mismatch at index %d: got %s want %s", i, categories[i].Slug, slug)
 		}
-		if categories[i].GroupName != "Minigames" {
-			t.Fatalf("expected Minigames group for %s, got %s", slug, categories[i].GroupName)
+	}
+
+	minigameGroup := categories[:3]
+	for i, category := range minigameGroup {
+		if category.GroupName != "Minigames" {
+			t.Fatalf("expected Minigames group for %s, got %s", category.Slug, category.GroupName)
 		}
-		if categories[i].DisplayOrder != i+1 {
-			t.Fatalf("display order mismatch for %s: got %d want %d", slug, categories[i].DisplayOrder, i+1)
+		if category.GroupOrder != 1 {
+			t.Fatalf("expected group_order 1 for %s, got %d", category.Slug, category.GroupOrder)
 		}
+		if category.DisplayOrder != i+1 {
+			t.Fatalf("display order mismatch for %s: got %d want %d", category.Slug, category.DisplayOrder, i+1)
+		}
+	}
+
+	dt2Group := categories[3:]
+	for i, category := range dt2Group {
+		if category.GroupName != "DT2 Bosses" {
+			t.Fatalf("expected DT2 Bosses group for %s, got %s", category.Slug, category.GroupName)
+		}
+		if category.GroupOrder != 2 {
+			t.Fatalf("expected group_order 2 for %s, got %d", category.Slug, category.GroupOrder)
+		}
+		if category.DisplayOrder != i+1 {
+			t.Fatalf("display order mismatch for %s: got %d want %d", category.Slug, category.DisplayOrder, i+1)
+		}
+	}
+
+	if categories[3].EmbedImageURL != categories[4].EmbedImageURL {
+		t.Fatalf("expected awakened duke to reuse normal duke thumbnail")
 	}
 }
 
@@ -230,4 +260,82 @@ func TestPBGroupBundleMessageStateLifecycle(t *testing.T) {
 	if len(all) != 1 || all[0].MessageID != "msg-2" {
 		t.Fatalf("expected one updated state with msg-2, got %+v", all)
 	}
+}
+
+func TestGetPBRecordsByCategory_ReturnsAllRecordsSorted(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+	if err := store.SaveGuild(ctx, &Guild{GuildID: "g1"}); err != nil {
+		t.Fatalf("save guild: %v", err)
+	}
+
+	now := time.Now().UTC()
+	submissions := []*PBSubmission{
+		{
+			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u1", DisplayName: "Alice",
+			TimeText: strPtr("01:00.00"), TimeCentiseconds: int64Ptr(6000), ProofURL: "https://a",
+			Status: pbSubmissionStatusAccepted, CreatedAt: now, UpdatedAt: now,
+		},
+		{
+			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u2", DisplayName: "Bob",
+			TimeText: strPtr("01:00.00"), TimeCentiseconds: int64Ptr(6000), ProofURL: "https://b",
+			Status: pbSubmissionStatusAccepted, CreatedAt: now, UpdatedAt: now.Add(time.Minute),
+		},
+		{
+			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u3", DisplayName: "Charlie",
+			TimeText: strPtr("01:01.00"), TimeCentiseconds: int64Ptr(6100), ProofURL: "https://c",
+			Status: pbSubmissionStatusAccepted, CreatedAt: now, UpdatedAt: now.Add(2 * time.Minute),
+		},
+	}
+	for _, submission := range submissions {
+		if err := store.CreatePBSubmission(ctx, submission); err != nil {
+			t.Fatalf("create submission for %s: %v", submission.DisplayName, err)
+		}
+	}
+
+	records := []*PBRecord{
+		{
+			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u1", DisplayName: "Alice",
+			TimeText: "01:00.00", TimeCentiseconds: 6000, ProofSubmissionID: submissions[0].ID, ProofURL: "https://a",
+			CreatedAt: now, UpdatedAt: now,
+		},
+		{
+			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u2", DisplayName: "Bob",
+			TimeText: "01:00.00", TimeCentiseconds: 6000, ProofSubmissionID: submissions[1].ID, ProofURL: "https://b",
+			CreatedAt: now, UpdatedAt: now.Add(time.Minute),
+		},
+		{
+			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u3", DisplayName: "Charlie",
+			TimeText: "01:01.00", TimeCentiseconds: 6100, ProofSubmissionID: submissions[2].ID, ProofURL: "https://c",
+			CreatedAt: now, UpdatedAt: now.Add(2 * time.Minute),
+		},
+	}
+	for _, record := range records {
+		if _, err := store.UpsertPBRecordIfBetter(ctx, record); err != nil {
+			t.Fatalf("upsert record for %s: %v", record.DisplayName, err)
+		}
+	}
+
+	got, err := store.GetPBRecordsByCategory(ctx, "g1", "inferno")
+	if err != nil {
+		t.Fatalf("GetPBRecordsByCategory: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(got))
+	}
+	if got[0].DisplayName != "Alice" || got[1].DisplayName != "Bob" || got[2].DisplayName != "Charlie" {
+		t.Fatalf("unexpected sort order: %+v", got)
+	}
+}
+
+func strPtr(value string) *string {
+	return &value
+}
+
+func int64Ptr(value int64) *int64 {
+	return &value
 }

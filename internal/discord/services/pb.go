@@ -425,7 +425,7 @@ func (s *PBService) GlobalRebuildGroupBundles(ctx context.Context, guildID strin
 func (s *PBService) buildGroupEmbeds(ctx context.Context, guildID string, categories []*database.PBCategory) ([]*discordgo.MessageEmbed, error) {
 	embeds := make([]*discordgo.MessageEmbed, 0, len(categories))
 	for _, category := range categories {
-		records, err := s.store.GetTopPBRecords(ctx, guildID, category.Slug, 3)
+		records, err := s.store.GetPBRecordsByCategory(ctx, guildID, category.Slug)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load top pb records for %s: %w", category.Slug, err)
 		}
@@ -513,24 +513,72 @@ func (s *PBService) buildSubmissionProofEmbed(submission *database.PBSubmission,
 	}
 }
 
-func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records []*database.PBRecord) *discordgo.MessageEmbed {
-	now := time.Now().UTC()
+type pbLeaderboardRow struct {
+	record *database.PBRecord
+	place  int
+}
 
-	sort.Slice(records, func(i, j int) bool {
-		if records[i].TimeCentiseconds != records[j].TimeCentiseconds {
-			return records[i].TimeCentiseconds < records[j].TimeCentiseconds
+func RankPBLeaderboardPlaceRows(records []*database.PBRecord) []pbLeaderboardRow {
+	if len(records) == 0 {
+		return nil
+	}
+
+	sorted := append([]*database.PBRecord(nil), records...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].TimeCentiseconds != sorted[j].TimeCentiseconds {
+			return sorted[i].TimeCentiseconds < sorted[j].TimeCentiseconds
 		}
-		return records[i].UpdatedAt.Before(records[j].UpdatedAt)
+		return sorted[i].UpdatedAt.Before(sorted[j].UpdatedAt)
 	})
 
+	rows := make([]pbLeaderboardRow, 0, len(sorted))
+	place := 0
+	var lastTime int64
+	for _, record := range sorted {
+		if record == nil {
+			continue
+		}
+		if place == 0 || record.TimeCentiseconds != lastTime {
+			place++
+			if place > 3 {
+				break
+			}
+			lastTime = record.TimeCentiseconds
+		}
+		rows = append(rows, pbLeaderboardRow{record: record, place: place})
+	}
+	return rows
+}
+
+func pbPlaceMedal(place int) string {
+	switch place {
+	case 1:
+		return "🥇"
+	case 2:
+		return "🥈"
+	case 3:
+		return "🥉"
+	default:
+		return fmt.Sprintf("%d.", place)
+	}
+}
+
+func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records []*database.PBRecord) *discordgo.MessageEmbed {
+	now := time.Now().UTC()
+	rows := RankPBLeaderboardPlaceRows(records)
+
 	var description strings.Builder
-	if len(records) == 0 {
+	if len(rows) == 0 {
 		description.WriteString("No approved PBs yet.\n\nSubmit your proof with `/submit-pb` to get on the board.")
 	} else {
-		rankEmojis := []string{"🥇", "🥈", "🥉"}
-		for i, record := range records {
-			rank := rankEmojis[i]
-			description.WriteString(fmt.Sprintf("%s - %s - [Proof](%s) - %s\n", rank, record.TimeText, record.ProofURL, record.DisplayName))
+		for _, row := range rows {
+			description.WriteString(fmt.Sprintf(
+				"%s - %s - [Proof](%s) - %s\n",
+				pbPlaceMedal(row.place),
+				row.record.TimeText,
+				row.record.ProofURL,
+				row.record.DisplayName,
+			))
 		}
 	}
 
