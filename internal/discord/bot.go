@@ -141,6 +141,8 @@ func (b *Bot) handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionC
 	switch data.Name {
 	case "remove", "rename":
 		b.handleRSNAutocomplete(s, i)
+	case "submit-pb":
+		b.handlePBCategoryAutocomplete(s, i)
 	}
 }
 

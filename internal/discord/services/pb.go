@@ -17,6 +17,8 @@ import (
 const (
 	PBApproveEmoji = "✅"
 	PBRejectEmoji  = "❌"
+
+	pbTimeFormatUserMessage = "Invalid time. Use MM:SS.xx or H:MM:SS.xx (e.g. 59:12.34 or 1:05:07.08)."
 )
 
 var pbTimePattern = regexp.MustCompile(`^(?:(\d+):)?([0-5]?\d):([0-5]\d)\.(\d{2})$`)
@@ -134,14 +136,18 @@ func (s *PBService) SubmitPB(ctx context.Context, input *PBSubmissionInput) (*da
 		UpdatedAt:     now,
 	}
 
-	if input.TimeText != nil && strings.TrimSpace(*input.TimeText) != "" {
-		timeCS, normalized, parseErr := ParsePBTimeStrict(*input.TimeText)
-		if parseErr != nil {
-			return nil, nil, parseErr
-		}
-		submission.TimeText = &normalized
-		submission.TimeCentiseconds = &timeCS
+	if input.TimeText == nil || strings.TrimSpace(*input.TimeText) == "" {
+		return nil, nil, fmt.Errorf("time is required")
 	}
+	timeCS, normalized, parseErr := ParsePBTimeStrict(*input.TimeText)
+	if parseErr != nil {
+		if s.logger != nil {
+			s.logger.Printf("submit-pb time parse failed: raw=%q err=%v", *input.TimeText, parseErr)
+		}
+		return nil, nil, fmt.Errorf("%s", pbTimeFormatUserMessage)
+	}
+	submission.TimeText = &normalized
+	submission.TimeCentiseconds = &timeCS
 
 	if err := s.store.CreatePBSubmission(ctx, submission); err != nil {
 		return nil, nil, err

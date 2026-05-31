@@ -298,3 +298,65 @@ func TestBuildGroupBundleContent_UsesGroupNameHeader(t *testing.T) {
 		t.Fatalf("expected existing markdown prefix preserved, got %q", got)
 	}
 }
+
+type submitPBMockStore struct {
+	mockPBStore
+	category *database.PBCategory
+	guild    *database.Guild
+	created  bool
+}
+
+func (m *submitPBMockStore) GetPBCategoryBySlug(context.Context, string) (*database.PBCategory, error) {
+	return m.category, nil
+}
+
+func (m *submitPBMockStore) GetGuild(context.Context, string) (*database.Guild, error) {
+	return m.guild, nil
+}
+
+func (m *submitPBMockStore) CreatePBSubmission(context.Context, *database.PBSubmission) error {
+	m.created = true
+	return nil
+}
+
+func TestSubmitPB_InvalidTimeReturnsCanonicalMessage(t *testing.T) {
+	store := &submitPBMockStore{
+		category: &database.PBCategory{Slug: "inferno", IsActive: true},
+		guild:    &database.Guild{GuildID: "g1", PbProofsChannelID: "proofs"},
+	}
+	service := &PBService{store: store}
+
+	invalidTime := "12:34"
+	_, _, err := service.SubmitPB(context.Background(), &PBSubmissionInput{
+		GuildID:      "g1",
+		CategorySlug: "inferno",
+		ProofURL:     "https://example.com/proof.png",
+		TimeText:     &invalidTime,
+	})
+	if err == nil || err.Error() != pbTimeFormatUserMessage {
+		t.Fatalf("expected canonical user message, got %v", err)
+	}
+	if store.created {
+		t.Fatalf("expected submission not to be created for invalid time")
+	}
+}
+
+func TestSubmitPB_RequiresDeclaredTime(t *testing.T) {
+	store := &submitPBMockStore{
+		category: &database.PBCategory{Slug: "inferno", IsActive: true},
+		guild:    &database.Guild{GuildID: "g1", PbProofsChannelID: "proofs"},
+	}
+	service := &PBService{store: store}
+
+	_, _, err := service.SubmitPB(context.Background(), &PBSubmissionInput{
+		GuildID:      "g1",
+		CategorySlug: "inferno",
+		ProofURL:     "https://example.com/proof.png",
+	})
+	if err == nil || !strings.Contains(err.Error(), "time is required") {
+		t.Fatalf("expected time required error, got %v", err)
+	}
+	if store.created {
+		t.Fatalf("expected submission not to be created without time")
+	}
+}

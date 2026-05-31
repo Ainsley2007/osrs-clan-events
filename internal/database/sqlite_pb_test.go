@@ -168,8 +168,8 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActivePBCategories returned error: %v", err)
 	}
-	if len(categories) != 11 {
-		t.Fatalf("expected 11 seeded categories, got %d", len(categories))
+	if len(categories) != 17 {
+		t.Fatalf("expected 17 seeded categories, got %d", len(categories))
 	}
 
 	wantOrder := []string{
@@ -178,6 +178,8 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		"the_leviathan", "the_leviathan_awakened",
 		"vardorvis", "vardorvis_awakened",
 		"the_whisperer", "the_whisperer_awakened",
+		"corrupted_gauntlet", "demonic_brutus", "doom_of_mokhaiotl",
+		"gauntlet", "phosanis_nightmare", "yama",
 	}
 	for i, slug := range wantOrder {
 		if categories[i].Slug != slug {
@@ -198,7 +200,7 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		}
 	}
 
-	dt2Group := categories[3:]
+	dt2Group := categories[3:11]
 	for i, category := range dt2Group {
 		if category.GroupName != "DT2 Bosses" {
 			t.Fatalf("expected DT2 Bosses group for %s, got %s", category.Slug, category.GroupName)
@@ -213,6 +215,22 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 
 	if categories[3].EmbedImageURL != categories[4].EmbedImageURL {
 		t.Fatalf("expected awakened duke to reuse normal duke thumbnail")
+	}
+
+	soloDuoGroup := categories[11:]
+	if len(soloDuoGroup) != 6 {
+		t.Fatalf("expected 6 solo & duo categories, got %d", len(soloDuoGroup))
+	}
+	for i, category := range soloDuoGroup {
+		if category.GroupName != "Solo & Duo Bosses (A-Z)" {
+			t.Fatalf("expected Solo & Duo Bosses (A-Z) group for %s, got %s", category.Slug, category.GroupName)
+		}
+		if category.GroupOrder != 3 {
+			t.Fatalf("expected group_order 3 for %s, got %d", category.Slug, category.GroupOrder)
+		}
+		if category.DisplayOrder != i+1 {
+			t.Fatalf("display order mismatch for %s: got %d want %d", category.Slug, category.DisplayOrder, i+1)
+		}
 	}
 }
 

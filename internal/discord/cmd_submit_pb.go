@@ -3,12 +3,16 @@ package discord
 import (
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 
+	"osrs-events/internal/database"
 	"osrs-events/internal/discord/services"
 
 	"github.com/bwmarrin/discordgo"
 )
+
+const maxPBCategoryAutocompleteChoices = 25
 
 func (b *Bot) submitPBCommand() Command {
 	return Command{
@@ -17,23 +21,11 @@ func (b *Bot) submitPBCommand() Command {
 			Description: "Submit a personal best proof for leaderboard review",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "category",
-					Description: "PB category",
-					Required:    true,
-					Choices: []*discordgo.ApplicationCommandOptionChoice{
-						{Name: "Inferno", Value: "inferno"},
-						{Name: "Fortis Colosseum", Value: "fortis_colosseum"},
-						{Name: "Fight Caves", Value: "fight_caves"},
-						{Name: "Duke Sucellus", Value: "duke_sucellus"},
-						{Name: "Duke Sucellus (Awakened)", Value: "duke_sucellus_awakened"},
-						{Name: "The Leviathan", Value: "the_leviathan"},
-						{Name: "The Leviathan (Awakened)", Value: "the_leviathan_awakened"},
-						{Name: "Vardorvis", Value: "vardorvis"},
-						{Name: "Vardorvis (Awakened)", Value: "vardorvis_awakened"},
-						{Name: "The Whisperer", Value: "the_whisperer"},
-						{Name: "The Whisperer (Awakened)", Value: "the_whisperer_awakened"},
-					},
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "category",
+					Description:  "PB category",
+					Required:     true,
+					Autocomplete: true,
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionAttachment,
@@ -45,7 +37,7 @@ func (b *Bot) submitPBCommand() Command {
 					Type:        discordgo.ApplicationCommandOptionString,
 					Name:        "time",
 					Description: "In-game time format (MM:SS.xx or H:MM:SS.xx)",
-					Required:    false,
+					Required:    true,
 				},
 			},
 		},
@@ -68,7 +60,7 @@ func (b *Bot) handleSubmitPB(s *discordgo.Session, i *discordgo.InteractionCreat
 	categoryOpt := data.GetOption("category")
 	attachmentOpt := data.GetOption("attachment")
 	timeOpt := data.GetOption("time")
-	if categoryOpt == nil || attachmentOpt == nil {
+	if categoryOpt == nil || attachmentOpt == nil || timeOpt == nil {
 		editDeferredWithError(s, i.Interaction, fmt.Errorf("missing required options"))
 		return
 	}
@@ -79,15 +71,13 @@ func (b *Bot) handleSubmitPB(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	userID, displayName := interactionUserAndDisplayName(i)
-
-	var timeText *string
-	if timeOpt != nil {
-		value := strings.TrimSpace(timeOpt.StringValue())
-		if value != "" {
-			timeText = &value
-		}
+	timeValue := strings.TrimSpace(timeOpt.StringValue())
+	if timeValue == "" {
+		editDeferredWithError(s, i.Interaction, fmt.Errorf("time is required"))
+		return
 	}
+
+	userID, displayName := interactionUserAndDisplayName(i)
 
 	ctx, cancel := cmdContext()
 	defer cancel()
@@ -96,7 +86,7 @@ func (b *Bot) handleSubmitPB(s *discordgo.Session, i *discordgo.InteractionCreat
 		CategorySlug:  categoryOpt.StringValue(),
 		DiscordUserID: userID,
 		DisplayName:   displayName,
-		TimeText:      timeText,
+		TimeText:      &timeValue,
 		ProofURL:      attachment.URL,
 	})
 	if err != nil {
@@ -110,6 +100,72 @@ func (b *Bot) handleSubmitPB(s *discordgo.Session, i *discordgo.InteractionCreat
 		submission.ID,
 	)
 	editDeferredContent(s, i.Interaction, content)
+}
+
+func (b *Bot) handlePBCategoryAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	ctx, cancel := cmdContext()
+	defer cancel()
+
+	categories, err := b.Store.GetActivePBCategories(ctx)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+			Data: &discordgo.InteractionResponseData{Choices: []*discordgo.ApplicationCommandOptionChoice{}},
+		})
+		return
+	}
+
+	query := pbCategoryAutocompleteQuery(i.ApplicationCommandData().Options)
+	choices := pbCategoryAutocompleteChoices(categories, query)
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{Choices: choices},
+	})
+}
+
+func pbCategoryAutocompleteQuery(options []*discordgo.ApplicationCommandInteractionDataOption) string {
+	for _, opt := range options {
+		if opt == nil || !opt.Focused || opt.Name != "category" {
+			continue
+		}
+		if opt.Type != discordgo.ApplicationCommandOptionString {
+			return ""
+		}
+		return opt.StringValue()
+	}
+	return ""
+}
+
+func pbCategoryAutocompleteChoices(categories []*database.PBCategory, query string) []*discordgo.ApplicationCommandOptionChoice {
+	query = strings.ToLower(strings.TrimSpace(query))
+
+	matches := make([]*database.PBCategory, 0, len(categories))
+	for _, category := range categories {
+		if category == nil || !category.IsActive {
+			continue
+		}
+		if query != "" && !strings.HasPrefix(strings.ToLower(category.DisplayName), query) {
+			continue
+		}
+		matches = append(matches, category)
+	}
+
+	slices.SortFunc(matches, func(a, b *database.PBCategory) int {
+		return strings.Compare(strings.ToLower(a.DisplayName), strings.ToLower(b.DisplayName))
+	})
+
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, min(len(matches), maxPBCategoryAutocompleteChoices))
+	for _, category := range matches {
+		if len(choices) >= maxPBCategoryAutocompleteChoices {
+			break
+		}
+		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+			Name:  category.DisplayName,
+			Value: category.Slug,
+		})
+	}
+	return choices
 }
 
 func getAttachmentOptionValue(data discordgo.ApplicationCommandInteractionData, option *discordgo.ApplicationCommandInteractionDataOption) (*discordgo.MessageAttachment, error) {
