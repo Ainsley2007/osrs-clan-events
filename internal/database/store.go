@@ -136,14 +136,6 @@ type PBLeaderboardMessage struct {
 	UpdatedAt time.Time
 }
 
-type LegacyPBLeaderboardMessage struct {
-	GuildID      string
-	CategorySlug string
-	ChannelID    string
-	MessageID    string
-	UpdatedAt    time.Time
-}
-
 type ParticipantPointUpdate struct {
 	DiscordUserID string
 	GuildID       string
@@ -223,8 +215,6 @@ type Store interface {
 	UpsertPBGroupBundleMessage(ctx context.Context, message *PBLeaderboardMessage) error
 	ListPBGroupBundleMessagesByGuild(ctx context.Context, guildID string) ([]*PBLeaderboardMessage, error)
 	DeletePBGroupBundleMessagesByGuild(ctx context.Context, guildID string) error
-	ListLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) ([]*LegacyPBLeaderboardMessage, error)
-	DeleteLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) error
 
 	UpdateParticipantPoints(ctx context.Context, updates []*ParticipantPointUpdate) error
 

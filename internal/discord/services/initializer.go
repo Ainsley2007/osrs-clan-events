@@ -381,16 +381,12 @@ func (s *InitializerService) ensurePBLeaderboardMessages(ctx context.Context, gu
 		requiredGroups[category.GroupName] = struct{}{}
 	}
 
-	legacyStates, err := s.store.ListLegacyPBLeaderboardMessagesByGuild(ctx, guild.GuildID)
-	if err != nil {
-		return false, fmt.Errorf("failed to load legacy pb leaderboard states: %w", err)
-	}
 	states, err := s.store.ListPBGroupBundleMessagesByGuild(ctx, guild.GuildID)
 	if err != nil {
 		return false, fmt.Errorf("failed to load pb group bundle states: %w", err)
 	}
 
-	needsGlobalRebuild := len(legacyStates) > 0 || len(states) == 0
+	needsGlobalRebuild := len(states) == 0
 	if !needsGlobalRebuild {
 		stateByGroup := make(map[string]*database.PBLeaderboardMessage, len(states))
 		for _, state := range states {

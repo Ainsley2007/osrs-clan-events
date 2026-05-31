@@ -180,16 +180,6 @@ func (s *SQLiteStore) init() error {
 		);`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_pb_records_unique_user_category
 			ON pb_records(guild_id, category_slug, discord_user_id);`,
-		`CREATE TABLE IF NOT EXISTS pb_leaderboard_messages (
-			guild_id TEXT NOT NULL,
-			category_slug TEXT NOT NULL,
-			channel_id TEXT NOT NULL,
-			message_id TEXT NOT NULL,
-			updated_at DATETIME NOT NULL,
-			PRIMARY KEY (guild_id, category_slug),
-			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE,
-			FOREIGN KEY (category_slug) REFERENCES pb_categories(slug) ON DELETE RESTRICT
-		);`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_pb_submissions_proof_message
 			ON pb_submissions(guild_id, proof_message_id)
 			WHERE proof_message_id IS NOT NULL;`,
@@ -238,7 +228,17 @@ func (s *SQLiteStore) init() error {
 	if err := s.seedPBCategories(); err != nil {
 		return err
 	}
+	if err := s.dropLegacyPBLeaderboardMessagesTable(); err != nil {
+		return err
+	}
 	s.ensureUniqueActiveEventIndex()
+	return nil
+}
+
+func (s *SQLiteStore) dropLegacyPBLeaderboardMessagesTable() error {
+	if _, err := s.db.Exec(`DROP TABLE IF EXISTS pb_leaderboard_messages`); err != nil {
+		return fmt.Errorf("failed to drop legacy pb_leaderboard_messages table: %w", err)
+	}
 	return nil
 }
 

@@ -231,12 +231,6 @@ func (m *mockPBStore) ListPBGroupBundleMessagesByGuild(context.Context, string) 
 func (m *mockPBStore) DeletePBGroupBundleMessagesByGuild(context.Context, string) error {
 	return nil
 }
-func (m *mockPBStore) ListLegacyPBLeaderboardMessagesByGuild(context.Context, string) ([]*database.LegacyPBLeaderboardMessage, error) {
-	return nil, nil
-}
-func (m *mockPBStore) DeleteLegacyPBLeaderboardMessagesByGuild(context.Context, string) error {
-	return nil
-}
 
 func TestGroupActiveCategories_OrdersByGroupAndDisplay(t *testing.T) {
 	store := &mockPBStore{

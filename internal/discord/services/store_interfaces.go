@@ -74,12 +74,7 @@ type InitializerStore interface {
 	SaveGuild(ctx context.Context, guild *database.Guild) error
 	GetActiveEvent(ctx context.Context, guildID string, eventType string) (*database.Event, error)
 	GetActivePBCategories(ctx context.Context) ([]*database.PBCategory, error)
-	GetPBGroupBundleMessage(ctx context.Context, guildID, groupName string) (*database.PBLeaderboardMessage, error)
-	UpsertPBGroupBundleMessage(ctx context.Context, message *database.PBLeaderboardMessage) error
 	ListPBGroupBundleMessagesByGuild(ctx context.Context, guildID string) ([]*database.PBLeaderboardMessage, error)
-	DeletePBGroupBundleMessagesByGuild(ctx context.Context, guildID string) error
-	ListLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) ([]*database.LegacyPBLeaderboardMessage, error)
-	DeleteLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) error
 }
 
 // OSRSConfigProvider returns OSRS config (bosses/skills) from e.g. Firebase Remote Config. Selection logic lives in the event service.
@@ -121,6 +116,4 @@ type PBStore interface {
 	UpsertPBGroupBundleMessage(ctx context.Context, message *database.PBLeaderboardMessage) error
 	ListPBGroupBundleMessagesByGuild(ctx context.Context, guildID string) ([]*database.PBLeaderboardMessage, error)
 	DeletePBGroupBundleMessagesByGuild(ctx context.Context, guildID string) error
-	ListLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) ([]*database.LegacyPBLeaderboardMessage, error)
-	DeleteLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) error
 }

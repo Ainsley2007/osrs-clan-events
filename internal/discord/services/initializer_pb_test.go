@@ -11,7 +11,6 @@ import (
 type mockInitializerPBStore struct {
 	categories []*database.PBCategory
 	states     []*database.PBLeaderboardMessage
-	legacy     []*database.LegacyPBLeaderboardMessage
 }
 
 func (m *mockInitializerPBStore) GetGuild(context.Context, string) (*database.Guild, error) {
@@ -26,23 +25,8 @@ func (m *mockInitializerPBStore) GetActiveEvent(context.Context, string, string)
 func (m *mockInitializerPBStore) GetActivePBCategories(context.Context) ([]*database.PBCategory, error) {
 	return m.categories, nil
 }
-func (m *mockInitializerPBStore) GetPBGroupBundleMessage(context.Context, string, string) (*database.PBLeaderboardMessage, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (m *mockInitializerPBStore) UpsertPBGroupBundleMessage(context.Context, *database.PBLeaderboardMessage) error {
-	return fmt.Errorf("not implemented")
-}
 func (m *mockInitializerPBStore) ListPBGroupBundleMessagesByGuild(context.Context, string) ([]*database.PBLeaderboardMessage, error) {
 	return m.states, nil
-}
-func (m *mockInitializerPBStore) DeletePBGroupBundleMessagesByGuild(context.Context, string) error {
-	return nil
-}
-func (m *mockInitializerPBStore) ListLegacyPBLeaderboardMessagesByGuild(context.Context, string) ([]*database.LegacyPBLeaderboardMessage, error) {
-	return m.legacy, nil
-}
-func (m *mockInitializerPBStore) DeleteLegacyPBLeaderboardMessagesByGuild(context.Context, string) error {
-	return nil
 }
 
 type mockPBBundleRefresher struct {

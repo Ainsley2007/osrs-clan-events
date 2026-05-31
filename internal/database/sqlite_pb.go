@@ -376,43 +376,6 @@ func (s *SQLiteStore) DeletePBGroupBundleMessagesByGuild(ctx context.Context, gu
 	return nil
 }
 
-func (s *SQLiteStore) ListLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) ([]*LegacyPBLeaderboardMessage, error) {
-	query := `
-		SELECT guild_id, category_slug, channel_id, message_id, updated_at
-		FROM pb_leaderboard_messages
-		WHERE guild_id = ?
-		ORDER BY category_slug ASC`
-	rows, err := s.db.QueryContext(ctx, query, guildID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list legacy pb leaderboard messages: %w", err)
-	}
-	defer rows.Close()
-
-	var messages []*LegacyPBLeaderboardMessage
-	for rows.Next() {
-		var message LegacyPBLeaderboardMessage
-		if err := rows.Scan(
-			&message.GuildID,
-			&message.CategorySlug,
-			&message.ChannelID,
-			&message.MessageID,
-			&message.UpdatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan legacy pb leaderboard message: %w", err)
-		}
-		messages = append(messages, &message)
-	}
-	return messages, rows.Err()
-}
-
-func (s *SQLiteStore) DeleteLegacyPBLeaderboardMessagesByGuild(ctx context.Context, guildID string) error {
-	query := `DELETE FROM pb_leaderboard_messages WHERE guild_id = ?`
-	if _, err := s.db.ExecContext(ctx, query, guildID); err != nil {
-		return fmt.Errorf("failed to delete legacy pb leaderboard messages: %w", err)
-	}
-	return nil
-}
-
 func (s *SQLiteStore) getPBSubmissionWithArgs(ctx context.Context, query string, args ...any) (*PBSubmission, error) {
 	var submission PBSubmission
 	var timeText sql.NullString

@@ -362,33 +362,15 @@ func (s *PBService) GlobalRebuildGroupBundles(ctx context.Context, guildID strin
 	if err != nil {
 		return err
 	}
-	legacyStates, err := s.store.ListLegacyPBLeaderboardMessagesByGuild(ctx, guildID)
-	if err != nil {
-		return err
-	}
 
-	deletedIDs := map[string]struct{}{}
 	for _, state := range states {
 		if state == nil || state.MessageID == "" {
-			continue
-		}
-		deletedIDs[state.MessageID] = struct{}{}
-		_ = s.session.ChannelMessageDelete(state.ChannelID, state.MessageID)
-	}
-	for _, state := range legacyStates {
-		if state == nil || state.MessageID == "" {
-			continue
-		}
-		if _, alreadyDeleted := deletedIDs[state.MessageID]; alreadyDeleted {
 			continue
 		}
 		_ = s.session.ChannelMessageDelete(state.ChannelID, state.MessageID)
 	}
 
 	if err := s.store.DeletePBGroupBundleMessagesByGuild(ctx, guildID); err != nil {
-		return err
-	}
-	if err := s.store.DeleteLegacyPBLeaderboardMessagesByGuild(ctx, guildID); err != nil {
 		return err
 	}
 
