@@ -104,6 +104,64 @@ func TestRankPBLeaderboardPlaceRows_AllTiedFirstShowsOnlyGold(t *testing.T) {
 	}
 }
 
+func TestBuildLeaderboardEmbed_SingleEntryShowsVacantSecondAndThird(t *testing.T) {
+	service := &PBService{}
+	category := &database.PBCategory{Slug: "vorkath", DisplayName: "Vorkath"}
+	now := time.Now().UTC()
+	records := []*database.PBRecord{
+		{
+			DisplayName:      "Alice",
+			TimeText:         "01:00.00",
+			TimeCentiseconds: 6000,
+			ProofURL:         "https://proof-a",
+			UpdatedAt:        now,
+		},
+	}
+
+	embed := service.buildLeaderboardEmbed(category, records)
+	desc := embed.Description
+	if strings.Contains(desc, "No approved PBs yet.") {
+		t.Fatalf("expected filled board, got empty message: %q", desc)
+	}
+	if !strings.Contains(desc, "🥈 - No record - Vacant") || !strings.Contains(desc, "🥉 - No record - Vacant") {
+		t.Fatalf("expected vacant 2nd and 3rd lines, got %q", desc)
+	}
+	if strings.Count(desc, "🥇") != 1 {
+		t.Fatalf("expected one gold row, got %q", desc)
+	}
+}
+
+func TestBuildLeaderboardEmbed_TwoPlacesShowsVacantThirdOnly(t *testing.T) {
+	service := &PBService{}
+	category := &database.PBCategory{Slug: "vorkath", DisplayName: "Vorkath"}
+	now := time.Now().UTC()
+	records := []*database.PBRecord{
+		{DisplayName: "Alice", TimeText: "01:00.00", TimeCentiseconds: 6000, ProofURL: "https://a", UpdatedAt: now},
+		{DisplayName: "Bob", TimeText: "01:01.00", TimeCentiseconds: 6100, ProofURL: "https://b", UpdatedAt: now},
+	}
+
+	desc := service.buildLeaderboardEmbed(category, records).Description
+	if !strings.Contains(desc, "🥉 - No record - Vacant") {
+		t.Fatalf("expected vacant 3rd line, got %q", desc)
+	}
+	if strings.Contains(desc, "🥈 - No record - Vacant") {
+		t.Fatalf("did not expect vacant 2nd line, got %q", desc)
+	}
+}
+
+func TestBuildLeaderboardEmbed_EmptyBoardShowsNoVacantLines(t *testing.T) {
+	service := &PBService{}
+	category := &database.PBCategory{Slug: "vorkath", DisplayName: "Vorkath"}
+
+	desc := service.buildLeaderboardEmbed(category, nil).Description
+	if !strings.Contains(desc, "No approved PBs yet.") {
+		t.Fatalf("expected empty board message, got %q", desc)
+	}
+	if strings.Contains(desc, "Vacant") {
+		t.Fatalf("empty board should not show vacant lines, got %q", desc)
+	}
+}
+
 func TestBuildLeaderboardEmbed_TiedFirstPlaceUsesDuplicateGoldMedals(t *testing.T) {
 	service := &PBService{}
 	category := &database.PBCategory{Slug: "inferno", DisplayName: "The Inferno"}

@@ -595,16 +595,37 @@ func pbPlaceMedal(place int) string {
 	}
 }
 
-func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records []*database.PBRecord) *discordgo.MessageEmbed {
-	now := time.Now().UTC()
-	rows := RankPBLeaderboardPlaceRows(records)
+const (
+	pbVacantPlaceTimeLabel   = "No record"
+	pbVacantPlacePlayerLabel = "Vacant"
+)
 
-	var description strings.Builder
+func pbVacantPlaceLine(place int) string {
+	return fmt.Sprintf("%s - %s - %s\n", pbPlaceMedal(place), pbVacantPlaceTimeLabel, pbVacantPlacePlayerLabel)
+}
+
+func writeLeaderboardEmbedDescription(b *strings.Builder, rows []pbLeaderboardRow) {
 	if len(rows) == 0 {
-		description.WriteString("No approved PBs yet.\n\nSubmit your proof with `/submit-pb` to get on the board.")
-	} else {
-		for _, row := range rows {
-			description.WriteString(fmt.Sprintf(
+		b.WriteString("No approved PBs yet.\n\nSubmit your proof with `/submit-pb` to get on the board.")
+		return
+	}
+
+	rowsByPlace := map[int][]pbLeaderboardRow{1: {}, 2: {}, 3: {}}
+	for _, row := range rows {
+		if row.place < 1 || row.place > 3 {
+			continue
+		}
+		rowsByPlace[row.place] = append(rowsByPlace[row.place], row)
+	}
+
+	for place := 1; place <= 3; place++ {
+		placeRows := rowsByPlace[place]
+		if len(placeRows) == 0 {
+			b.WriteString(pbVacantPlaceLine(place))
+			continue
+		}
+		for _, row := range placeRows {
+			b.WriteString(fmt.Sprintf(
 				"%s - %s - [Proof](%s) - %s\n",
 				pbPlaceMedal(row.place),
 				row.record.TimeText,
@@ -613,6 +634,14 @@ func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records
 			))
 		}
 	}
+}
+
+func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records []*database.PBRecord) *discordgo.MessageEmbed {
+	now := time.Now().UTC()
+	rows := RankPBLeaderboardPlaceRows(records)
+
+	var description strings.Builder
+	writeLeaderboardEmbedDescription(&description, rows)
 
 	return &discordgo.MessageEmbed{
 		Title:       category.DisplayName,

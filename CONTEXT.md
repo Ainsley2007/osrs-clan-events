@@ -66,6 +66,10 @@ _Avoid_: Latest PB, any approved run
 One of the top three rank positions shown on a PB Category board (1st, 2nd, or 3rd place).
 _Avoid_: Top three records, row limit
 
+**Vacant PB Leaderboard Place**:
+A top-three place on a PB Category board with no Accepted PB yet, shown as an explicit open slot (for example `🥈 - No record - Vacant`) rather than leaving a gap.
+_Avoid_: Empty board, Pending Submission
+
 **PB Place Tie**:
 When multiple Accepted PBs share the same canonical time at one PB Leaderboard Place, all tied players are shown for that place and the visible row count can exceed three.
 _Avoid_: Hidden tie, single winner per place
