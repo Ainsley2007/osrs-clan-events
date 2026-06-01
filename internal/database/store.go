@@ -98,12 +98,13 @@ type PBCategory struct {
 }
 
 type PBSubmission struct {
-	ID                  int64
-	GuildID             string
-	CategorySlug        string
-	DiscordUserID       string
-	DisplayName         string
-	TimeText            *string
+	ID                      int64
+	GuildID                 string
+	CategorySlug            string
+	DiscordUserID           string
+	DisplayName             string
+	LeaderboardDisplayName  string
+	TimeText                *string
 	TimeCentiseconds    *int64
 	ProofURL            string
 	ProofMessageID      *string

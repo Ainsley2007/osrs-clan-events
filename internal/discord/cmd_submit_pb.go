@@ -39,6 +39,12 @@ func (b *Bot) submitPBCommand() Command {
 					Description: "In-game time format (MM:SS.xx or H:MM:SS.xx)",
 					Required:    true,
 				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "teammates",
+					Description: "Optional: @ tag up to 4 clan teammates on this PB",
+					Required:    false,
+				},
 			},
 		},
 		Handler: b.handleSubmitPB,
@@ -79,6 +85,11 @@ func (b *Bot) handleSubmitPB(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	userID, displayName := interactionUserAndDisplayName(i)
 
+	teammatesRaw := ""
+	if teammatesOpt := data.GetOption("teammates"); teammatesOpt != nil {
+		teammatesRaw = teammatesOpt.StringValue()
+	}
+
 	ctx, cancel := cmdContext()
 	defer cancel()
 	submission, category, err := b.PBService.SubmitPB(ctx, &services.PBSubmissionInput{
@@ -86,6 +97,7 @@ func (b *Bot) handleSubmitPB(s *discordgo.Session, i *discordgo.InteractionCreat
 		CategorySlug:  categoryOpt.StringValue(),
 		DiscordUserID: userID,
 		DisplayName:   displayName,
+		TeammatesRaw:  teammatesRaw,
 		TimeText:      &timeValue,
 		ProofURL:      attachment.URL,
 	})

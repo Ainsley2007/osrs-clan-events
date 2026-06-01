@@ -373,7 +373,9 @@ func (s *InitializerService) ensurePBLeaderboardMessages(ctx context.Context, gu
 		return false, nil
 	}
 
-	requiredGroups := make(map[string]struct{})
+	requiredGroups := map[string]struct{}{
+		SubmissionRulesGroupName: {},
+	}
 	for _, category := range categories {
 		if category == nil {
 			continue

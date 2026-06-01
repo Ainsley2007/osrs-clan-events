@@ -42,6 +42,7 @@ type PBSubmissionInput struct {
 	CategorySlug  string
 	DiscordUserID string
 	DisplayName   string
+	TeammatesRaw  string
 	TimeText      *string
 	ProofURL      string
 }
@@ -56,6 +57,7 @@ type pbCategoryGroup struct {
 	Name       string
 	Order      int
 	Categories []*database.PBCategory
+	RulesOnly  bool
 }
 
 func ParsePBTimeStrict(raw string) (int64, string, error) {
@@ -124,16 +126,23 @@ func (s *PBService) SubmitPB(ctx context.Context, input *PBSubmissionInput) (*da
 		return nil, nil, fmt.Errorf("PB channels are not initialized yet")
 	}
 
+	teammateNames, err := resolvePBTeammates(s.session, input.GuildID, input.DiscordUserID, input.TeammatesRaw)
+	if err != nil {
+		return nil, nil, err
+	}
+	leaderboardDisplayName := FormatLeaderboardDisplayName(input.DisplayName, teammateNames)
+
 	now := time.Now().UTC()
 	submission := &database.PBSubmission{
-		GuildID:       input.GuildID,
-		CategorySlug:  input.CategorySlug,
-		DiscordUserID: input.DiscordUserID,
-		DisplayName:   input.DisplayName,
-		ProofURL:      input.ProofURL,
-		Status:        "pending",
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		GuildID:                input.GuildID,
+		CategorySlug:           input.CategorySlug,
+		DiscordUserID:          input.DiscordUserID,
+		DisplayName:            input.DisplayName,
+		LeaderboardDisplayName: leaderboardDisplayName,
+		ProofURL:               input.ProofURL,
+		Status:                 "pending",
+		CreatedAt:              now,
+		UpdatedAt:              now,
 	}
 
 	if input.TimeText == nil || strings.TrimSpace(*input.TimeText) == "" {
@@ -194,7 +203,7 @@ func (s *PBService) HandleApproval(ctx context.Context, guildID, proofMessageID,
 		GuildID:           submission.GuildID,
 		CategorySlug:      submission.CategorySlug,
 		DiscordUserID:     submission.DiscordUserID,
-		DisplayName:       submission.DisplayName,
+		DisplayName:       submissionLeaderboardDisplayName(submission),
 		TimeText:          *submission.TimeText,
 		TimeCentiseconds:  *submission.TimeCentiseconds,
 		ProofSubmissionID: submission.ID,
@@ -251,7 +260,7 @@ func (s *PBService) RefreshGroupBundle(ctx context.Context, guildID, groupName s
 		return fmt.Errorf("PB leaderboard channel is not configured")
 	}
 
-	groups, err := s.groupActiveCategories(ctx)
+	groups, err := s.allLeaderboardGroups(ctx)
 	if err != nil {
 		return err
 	}
@@ -267,7 +276,7 @@ func (s *PBService) RefreshGroupBundle(ctx context.Context, guildID, groupName s
 		return fmt.Errorf("pb group %q not found", groupName)
 	}
 
-	embeds, err := s.buildGroupEmbeds(ctx, guildID, group.Categories)
+	embeds, err := s.buildEmbedsForGroup(ctx, guildID, group)
 	if err != nil {
 		return err
 	}
@@ -304,7 +313,7 @@ func (s *PBService) RefreshAllGroupBundles(ctx context.Context, guildID string) 
 		return fmt.Errorf("PB leaderboard channel is not configured")
 	}
 
-	groups, err := s.groupActiveCategories(ctx)
+	groups, err := s.allLeaderboardGroups(ctx)
 	if err != nil {
 		return err
 	}
@@ -333,7 +342,7 @@ func (s *PBService) RefreshAllGroupBundles(ctx context.Context, guildID string) 
 			return s.GlobalRebuildGroupBundles(ctx, guildID)
 		}
 
-		embeds, err := s.buildGroupEmbeds(ctx, guildID, group.Categories)
+		embeds, err := s.buildEmbedsForGroup(ctx, guildID, group)
 		if err != nil {
 			return err
 		}
@@ -380,13 +389,13 @@ func (s *PBService) GlobalRebuildGroupBundles(ctx context.Context, guildID strin
 		return err
 	}
 
-	groups, err := s.groupActiveCategories(ctx)
+	groups, err := s.allLeaderboardGroups(ctx)
 	if err != nil {
 		return err
 	}
 	now := time.Now().UTC()
 	for _, group := range groups {
-		embeds, err := s.buildGroupEmbeds(ctx, guildID, group.Categories)
+		embeds, err := s.buildEmbedsForGroup(ctx, guildID, group)
 		if err != nil {
 			return err
 		}
@@ -408,6 +417,24 @@ func (s *PBService) GlobalRebuildGroupBundles(ctx context.Context, guildID strin
 		}
 	}
 	return nil
+}
+
+func (s *PBService) allLeaderboardGroups(ctx context.Context) ([]*pbCategoryGroup, error) {
+	categoryGroups, err := s.groupActiveCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append([]*pbCategoryGroup{submissionRulesGroup()}, categoryGroups...), nil
+}
+
+func (s *PBService) buildEmbedsForGroup(ctx context.Context, guildID string, group *pbCategoryGroup) ([]*discordgo.MessageEmbed, error) {
+	if group == nil {
+		return nil, fmt.Errorf("pb group is required")
+	}
+	if group.RulesOnly {
+		return []*discordgo.MessageEmbed{s.buildSubmissionRulesEmbed()}, nil
+	}
+	return s.buildGroupEmbeds(ctx, guildID, group.Categories)
 }
 
 func (s *PBService) buildGroupEmbeds(ctx context.Context, guildID string, categories []*database.PBCategory) ([]*discordgo.MessageEmbed, error) {
@@ -485,9 +512,9 @@ func (s *PBService) buildSubmissionProofEmbed(submission *database.PBSubmission,
 	return &discordgo.MessageEmbed{
 		Title: "PB Submission Review",
 		Description: fmt.Sprintf(
-			"**Category:** %s\n**Player:** %s\n**Time:** %s\n**Submission ID:** `%d`\n\nReact with %s to accept or %s to reject.",
+			"**Category:** %s\n**Players:** %s\n**Time:** %s\n**Submission ID:** `%d`\n\nReact with %s to accept or %s to reject.",
 			category.DisplayName,
-			submission.DisplayName,
+			submissionLeaderboardDisplayName(submission),
 			timeDisplay,
 			submission.ID,
 			PBApproveEmoji,
@@ -615,10 +642,10 @@ func (s *PBService) MarkProofSubmissionAccepted(channelID string, result *PBMode
 	embed := &discordgo.MessageEmbed{
 		Title: "PB Submission Reviewed",
 		Description: fmt.Sprintf(
-			"**Status:** Reviewed (Accepted)\n**Result:** %s\n\n**Category:** %s\n**Player:** %s\n**Time:** %s\n**Submission ID:** `%d`\n**Reviewed by:** %s",
+			"**Status:** Reviewed (Accepted)\n**Result:** %s\n\n**Category:** %s\n**Players:** %s\n**Time:** %s\n**Submission ID:** `%d`\n**Reviewed by:** %s",
 			improvementText,
 			result.Category.DisplayName,
-			result.Submission.DisplayName,
+			submissionLeaderboardDisplayName(result.Submission),
 			timeDisplay,
 			result.Submission.ID,
 			reviewerName,

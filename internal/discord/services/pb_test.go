@@ -232,6 +232,29 @@ func (m *mockPBStore) DeletePBGroupBundleMessagesByGuild(context.Context, string
 	return nil
 }
 
+func TestAllLeaderboardGroups_SubmissionRulesFirst(t *testing.T) {
+	store := &mockPBStore{
+		activeCategories: []*database.PBCategory{
+			{Slug: "inferno", GroupName: "Minigames", GroupOrder: 1, DisplayOrder: 1},
+		},
+	}
+	service := &PBService{store: store}
+
+	groups, err := service.allLeaderboardGroups(context.Background())
+	if err != nil {
+		t.Fatalf("allLeaderboardGroups returned error: %v", err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("expected rules + minigames groups, got %d", len(groups))
+	}
+	if !groups[0].RulesOnly || groups[0].Name != SubmissionRulesGroupName {
+		t.Fatalf("expected submission rules first, got %#v", groups[0])
+	}
+	if groups[1].Name != "Minigames" {
+		t.Fatalf("expected minigames second, got %s", groups[1].Name)
+	}
+}
+
 func TestGroupActiveCategories_OrdersByGroupAndDisplay(t *testing.T) {
 	store := &mockPBStore{
 		activeCategories: []*database.PBCategory{

@@ -48,7 +48,6 @@ func TestEnsurePBLeaderboardMessages_GlobalRebuildWhenGroupStateMissing(t *testi
 	store := &mockInitializerPBStore{
 		categories: []*database.PBCategory{
 			{Slug: "inferno", GroupName: "Minigames"},
-			{Slug: "nightmare", GroupName: "Bosses"},
 		},
 	}
 	pb := &mockPBBundleRefresher{}

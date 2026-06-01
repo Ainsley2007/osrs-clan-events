@@ -74,10 +74,10 @@ func (s *SQLiteStore) GetPBCategoryBySlug(ctx context.Context, slug string) (*PB
 func (s *SQLiteStore) CreatePBSubmission(ctx context.Context, submission *PBSubmission) error {
 	query := `
 		INSERT INTO pb_submissions (
-			guild_id, category_slug, discord_user_id, display_name,
+			guild_id, category_slug, discord_user_id, display_name, leaderboard_display_name,
 			time_text, time_centiseconds, proof_url, proof_message_id, status,
 			reviewed_by_discord_id, reviewed_at, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var timeText any
 	if submission.TimeText != nil {
@@ -107,6 +107,7 @@ func (s *SQLiteStore) CreatePBSubmission(ctx context.Context, submission *PBSubm
 		submission.CategorySlug,
 		submission.DiscordUserID,
 		submission.DisplayName,
+		submission.LeaderboardDisplayName,
 		timeText,
 		timeCentiseconds,
 		submission.ProofURL,
@@ -143,7 +144,7 @@ func (s *SQLiteStore) UpdatePBSubmissionProofMessageID(ctx context.Context, subm
 func (s *SQLiteStore) GetPendingPBSubmissionByProofMessageID(ctx context.Context, guildID, proofMessageID string) (*PBSubmission, error) {
 	query := `
 		SELECT
-			id, guild_id, category_slug, discord_user_id, display_name,
+			id, guild_id, category_slug, discord_user_id, display_name, leaderboard_display_name,
 			time_text, time_centiseconds, proof_url, proof_message_id, status,
 			reviewed_by_discord_id, reviewed_at, created_at, updated_at
 		FROM pb_submissions
@@ -390,6 +391,7 @@ func (s *SQLiteStore) getPBSubmissionWithArgs(ctx context.Context, query string,
 		&submission.CategorySlug,
 		&submission.DiscordUserID,
 		&submission.DisplayName,
+		&submission.LeaderboardDisplayName,
 		&timeText,
 		&timeCentiseconds,
 		&submission.ProofURL,

@@ -22,16 +22,17 @@ func TestPBSubmissionModerationLifecycle(t *testing.T) {
 	timeText := "01:02.34"
 	timeCS := int64(6234)
 	sub := &PBSubmission{
-		GuildID:          "g1",
-		CategorySlug:     "inferno",
-		DiscordUserID:    "u1",
-		DisplayName:      "PlayerOne",
-		TimeText:         &timeText,
-		TimeCentiseconds: &timeCS,
-		ProofURL:         "https://example.com/proof.png",
-		Status:           pbSubmissionStatusPending,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		GuildID:                "g1",
+		CategorySlug:           "inferno",
+		DiscordUserID:          "u1",
+		DisplayName:            "PlayerOne",
+		LeaderboardDisplayName: "PlayerOne",
+		TimeText:               &timeText,
+		TimeCentiseconds:       &timeCS,
+		ProofURL:               "https://example.com/proof.png",
+		Status:                 pbSubmissionStatusPending,
+		CreatedAt:              now,
+		UpdatedAt:              now,
 	}
 	if err := store.CreatePBSubmission(ctx, sub); err != nil {
 		t.Fatalf("create submission: %v", err)
@@ -72,16 +73,17 @@ func TestUpsertPBRecordIfBetter(t *testing.T) {
 	baseTimeText := "01:02.34"
 	baseTimeCS := int64(6234)
 	sub := &PBSubmission{
-		GuildID:          "g1",
-		CategorySlug:     "inferno",
-		DiscordUserID:    "u1",
-		DisplayName:      "PlayerOne",
-		TimeText:         &baseTimeText,
-		TimeCentiseconds: &baseTimeCS,
-		ProofURL:         "https://example.com/proof-base.png",
-		Status:           pbSubmissionStatusAccepted,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		GuildID:                "g1",
+		CategorySlug:           "inferno",
+		DiscordUserID:          "u1",
+		DisplayName:            "PlayerOne",
+		LeaderboardDisplayName: "PlayerOne",
+		TimeText:               &baseTimeText,
+		TimeCentiseconds:       &baseTimeCS,
+		ProofURL:               "https://example.com/proof-base.png",
+		Status:                 pbSubmissionStatusAccepted,
+		CreatedAt:              now,
+		UpdatedAt:              now,
 	}
 	if err := store.CreatePBSubmission(ctx, sub); err != nil {
 		t.Fatalf("create base submission: %v", err)
@@ -312,17 +314,20 @@ func TestGetPBRecordsByCategory_ReturnsAllRecordsSorted(t *testing.T) {
 	now := time.Now().UTC()
 	submissions := []*PBSubmission{
 		{
-			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u1", DisplayName: "Alice",
+			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u1",
+			DisplayName: "Alice", LeaderboardDisplayName: "Alice",
 			TimeText: strPtr("01:00.00"), TimeCentiseconds: int64Ptr(6000), ProofURL: "https://a",
 			Status: pbSubmissionStatusAccepted, CreatedAt: now, UpdatedAt: now,
 		},
 		{
-			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u2", DisplayName: "Bob",
+			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u2",
+			DisplayName: "Bob", LeaderboardDisplayName: "Bob",
 			TimeText: strPtr("01:00.00"), TimeCentiseconds: int64Ptr(6000), ProofURL: "https://b",
 			Status: pbSubmissionStatusAccepted, CreatedAt: now, UpdatedAt: now.Add(time.Minute),
 		},
 		{
-			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u3", DisplayName: "Charlie",
+			GuildID: "g1", CategorySlug: "inferno", DiscordUserID: "u3",
+			DisplayName: "Charlie", LeaderboardDisplayName: "Charlie",
 			TimeText: strPtr("01:01.00"), TimeCentiseconds: int64Ptr(6100), ProofURL: "https://c",
 			Status: pbSubmissionStatusAccepted, CreatedAt: now, UpdatedAt: now.Add(2 * time.Minute),
 		},

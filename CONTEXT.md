@@ -11,11 +11,19 @@ A named leaderboard lane for one activity (for example `inferno`) with its own r
 _Avoid_: Event type, boss category
 
 **Leaderboard Group**:
-A named bundle of PB Categories rendered together in one Discord message (for example `Minigames`).
+A named bundle rendered together in one Discord message (for example `Minigames`), made up of PB Category boards and optionally other fixed content.
 _Avoid_: Category, channel section
 
+**Submission Rules**:
+The informational Leaderboard Group at the top of the PB leaderboard channel: one Rules Embed with how to submit and clan expectations, not a ranked PB Category.
+_Avoid_: PB Category, proof post, Accepted PB
+
+**Rules Embed**:
+The single static embed in the Submission Rules Leaderboard Group; not tied to rankings or the Proof Queue.
+_Avoid_: Group Bundle Message for bosses, Pending Submission
+
 **Group Bundle Message**:
-The single Discord message for one Leaderboard Group, containing group header text and all category embeds in that group.
+The single Discord message for one Leaderboard Group, containing group header text and its embeds (category boards and/or a Rules Embed).
 _Avoid_: Per-category message, proof post
 
 **Global Rebuild**:
@@ -34,8 +42,20 @@ _Avoid_: Free-text guess, moderator-edited time
 A PB Submission with a Valid Declared Time that is in the Proof Queue and awaiting moderator decision.
 _Avoid_: Approved submission, archived submission
 
+**PB Submitter**:
+The Discord member who runs `/submit-pb` and owns the submission for ranking purposes.
+_Avoid_: Any teammate, moderator
+
+**PB Teammate**:
+An optional additional clan member tagged on a submission as having participated in a group PB; must be a member of the same Discord server as the submission.
+_Avoid_: PB Submitter, moderator, users outside the server
+
+**Leaderboard Display Name**:
+The name line shown on a PB Category board: PB Submitter first, then PB Teammates when present (for example `Alice, Bob, Charlie`).
+_Avoid_: RSN, Discord handle only
+
 **Accepted PB**:
-The fastest approved time for one user in one guild and one PB Category.
+The fastest approved time for one PB Submitter in one guild and one PB Category, shown on the board with its Leaderboard Display Name.
 _Avoid_: Latest PB, any approved run
 
 **PB Leaderboard Place**:

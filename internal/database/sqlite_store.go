@@ -150,6 +150,7 @@ func (s *SQLiteStore) init() error {
 			category_slug TEXT NOT NULL,
 			discord_user_id TEXT NOT NULL,
 			display_name TEXT NOT NULL,
+			leaderboard_display_name TEXT NOT NULL DEFAULT '',
 			time_text TEXT,
 			time_centiseconds INTEGER,
 			proof_url TEXT NOT NULL,
@@ -224,6 +225,9 @@ func (s *SQLiteStore) init() error {
 	}
 	if err := s.migratePBCategoryGroupingColumns(); err != nil {
 		return fmt.Errorf("failed to migrate pb category grouping columns: %w", err)
+	}
+	if err := s.migratePBSubmissionLeaderboardDisplayName(); err != nil {
+		return fmt.Errorf("failed to migrate pb submission leaderboard display name: %w", err)
 	}
 	if err := s.seedPBCategories(); err != nil {
 		return err
@@ -325,6 +329,23 @@ func (s *SQLiteStore) migratePBCategoryGroupingColumns() error {
 	}
 
 	return nil
+}
+
+func (s *SQLiteStore) migratePBSubmissionLeaderboardDisplayName() error {
+	has, err := s.hasTableColumn("pb_submissions", "leaderboard_display_name")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE pb_submissions ADD COLUMN leaderboard_display_name TEXT NOT NULL DEFAULT ''`); err != nil && !isDuplicateColumnErr(err) {
+		return fmt.Errorf("add pb_submissions.leaderboard_display_name: %w", err)
+	}
+
+	_, err = s.db.Exec(`UPDATE pb_submissions SET leaderboard_display_name = display_name WHERE leaderboard_display_name = ''`)
+	return err
 }
 
 func (s *SQLiteStore) seedPBCategories() error {
