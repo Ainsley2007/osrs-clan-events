@@ -26,8 +26,12 @@ _Avoid_: Group Bundle Message for bosses, Pending Submission
 The single Discord message for one Leaderboard Group, containing group header text and its embeds (category boards and/or a Rules Embed).
 _Avoid_: Per-category message, proof post
 
+**Quick Links**:
+The message at the bottom of the PB leaderboard channel: jump links to each Leaderboard Group (including Submission Rules) plus a plain-text list of PB Categories in that group so players know which bosses each section contains.
+_Avoid_: Leaderboard title, per-category jump links, proof post
+
 **Global Rebuild**:
-A recovery action that removes all PB group bundle messages for a guild and recreates them from persisted state.
+A recovery action that removes all PB group bundle messages and Quick Links for a guild, then recreates them from persisted state.
 _Avoid_: Partial fix, single-message patch
 
 **PB Submission**:

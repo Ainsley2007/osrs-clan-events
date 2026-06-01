@@ -409,6 +409,14 @@ func (s *InitializerService) ensurePBLeaderboardMessages(ctx context.Context, gu
 				break
 			}
 		}
+		if !needsGlobalRebuild {
+			quickLinks := stateByGroup[QuickLinksStateGroupName]
+			if quickLinks == nil {
+				needsGlobalRebuild = true
+			} else if _, msgErr := s.session.ChannelMessage(quickLinks.ChannelID, quickLinks.MessageID); msgErr != nil {
+				needsGlobalRebuild = true
+			}
+		}
 	}
 
 	if needsGlobalRebuild {

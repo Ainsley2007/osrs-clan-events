@@ -301,7 +301,10 @@ func (s *PBService) RefreshGroupBundle(ctx context.Context, guildID, groupName s
 		return s.GlobalRebuildGroupBundles(ctx, guildID)
 	}
 	state.UpdatedAt = now
-	return s.store.UpsertPBGroupBundleMessage(ctx, state)
+	if err := s.store.UpsertPBGroupBundleMessage(ctx, state); err != nil {
+		return err
+	}
+	return s.refreshQuickLinksForGuild(ctx, guildID, guild.PbLeaderboardChannelID)
 }
 
 func (s *PBService) RefreshAllGroupBundles(ctx context.Context, guildID string) error {
@@ -361,7 +364,19 @@ func (s *PBService) RefreshAllGroupBundles(ctx context.Context, guildID string) 
 		}
 	}
 
-	return nil
+	return s.refreshQuickLinksForGuild(ctx, guildID, guild.PbLeaderboardChannelID)
+}
+
+func (s *PBService) refreshQuickLinksForGuild(ctx context.Context, guildID, channelID string) error {
+	groups, err := s.allLeaderboardGroups(ctx)
+	if err != nil {
+		return err
+	}
+	states, err := s.store.ListPBGroupBundleMessagesByGuild(ctx, guildID)
+	if err != nil {
+		return err
+	}
+	return s.syncQuickLinks(ctx, guildID, channelID, groups, groupMessageIDsFromStates(states))
 }
 
 func (s *PBService) GlobalRebuildGroupBundles(ctx context.Context, guildID string) error {
@@ -394,6 +409,7 @@ func (s *PBService) GlobalRebuildGroupBundles(ctx context.Context, guildID strin
 		return err
 	}
 	now := time.Now().UTC()
+	groupMessageIDs := make(map[string]string, len(groups))
 	for _, group := range groups {
 		embeds, err := s.buildEmbedsForGroup(ctx, guildID, group)
 		if err != nil {
@@ -406,6 +422,7 @@ func (s *PBService) GlobalRebuildGroupBundles(ctx context.Context, guildID strin
 		if err != nil {
 			return fmt.Errorf("failed to create pb group bundle %s: %w", group.Name, err)
 		}
+		groupMessageIDs[group.Name] = msg.ID
 		if err := s.store.UpsertPBGroupBundleMessage(ctx, &database.PBLeaderboardMessage{
 			GuildID:   guildID,
 			GroupName: group.Name,
@@ -416,7 +433,7 @@ func (s *PBService) GlobalRebuildGroupBundles(ctx context.Context, guildID strin
 			return err
 		}
 	}
-	return nil
+	return s.syncQuickLinks(ctx, guildID, guild.PbLeaderboardChannelID, groups, groupMessageIDs)
 }
 
 func (s *PBService) allLeaderboardGroups(ctx context.Context) ([]*pbCategoryGroup, error) {
