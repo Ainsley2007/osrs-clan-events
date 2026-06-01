@@ -353,7 +353,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "Minigames",
 			groupOrder:   1,
 			displayOrder: 1,
-			imageURL:     "https://images-ext-1.discordapp.net/external/X8UMtpv21fsvGtd_bu-JO1YOJNZgd5fxnmwlCMxWuvg/%3F2d222/https/oldschool.runescape.wiki/images/thumb/TzKal-Zuk.png/138px-TzKal-Zuk.png?format=webp&quality=lossless&width=276&height=300",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/TzKal-Zuk.png/138px-TzKal-Zuk.png",
 		},
 		{
 			slug:         "fortis_colosseum",
@@ -361,7 +361,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "Minigames",
 			groupOrder:   1,
 			displayOrder: 2,
-			imageURL:     "https://images-ext-1.discordapp.net/external/CGjkbhxg5A4Mnqts0bl_dU3KuhjdN14K5ZgBzdQ-6CY/%3F91250/https/oldschool.runescape.wiki/images/thumb/Sol_Heredit.png/104px-Sol_Heredit.png?format=webp&quality=lossless&width=208&height=300",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Sol_Heredit.png/104px-Sol_Heredit.png",
 		},
 		{
 			slug:         "fight_caves",
@@ -369,7 +369,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "Minigames",
 			groupOrder:   1,
 			displayOrder: 3,
-			imageURL:     "https://images-ext-1.discordapp.net/external/5DpjS_0B3SGLKRmBZeR8Yn_PJIvXNtcI-yhqN_r11_k/%3F87507/https/oldschool.runescape.wiki/images/thumb/TzTok-Jad.png/135px-TzTok-Jad.png?format=webp&quality=lossless&width=270&height=296",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/TzTok-Jad.png/135px-TzTok-Jad.png",
 		},
 		{
 			slug:         "duke_sucellus",
@@ -377,7 +377,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "DT2 Bosses",
 			groupOrder:   2,
 			displayOrder: 1,
-			imageURL:     "https://images-ext-1.discordapp.net/external/4BOHezS9s1vD-y4AjV19sPoXLtkp4vVdPftVniFjalI/%3Fd588a/https/oldschool.runescape.wiki/images/thumb/Duke_Sucellus.png/280px-Duke_Sucellus.png?format=webp&quality=lossless&width=560&height=622",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Duke_Sucellus.png/280px-Duke_Sucellus.png",
 		},
 		{
 			slug:         "duke_sucellus_awakened",
@@ -385,7 +385,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "DT2 Bosses",
 			groupOrder:   2,
 			displayOrder: 2,
-			imageURL:     "https://images-ext-1.discordapp.net/external/4BOHezS9s1vD-y4AjV19sPoXLtkp4vVdPftVniFjalI/%3Fd588a/https/oldschool.runescape.wiki/images/thumb/Duke_Sucellus.png/280px-Duke_Sucellus.png?format=webp&quality=lossless&width=560&height=622",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Duke_Sucellus.png/280px-Duke_Sucellus.png",
 		},
 		{
 			slug:         "the_leviathan",
@@ -393,7 +393,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "DT2 Bosses",
 			groupOrder:   2,
 			displayOrder: 3,
-			imageURL:     "https://images-ext-1.discordapp.net/external/EU-qGAjrBrJHTaBGu2ge8OdlfwQSaa7KXBiIySkjEzE/%3Fd588a/https/oldschool.runescape.wiki/images/thumb/The_Leviathan.png/280px-The_Leviathan.png?format=webp&quality=lossless&width=560&height=678",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/The_Leviathan.png/280px-The_Leviathan.png",
 		},
 		{
 			slug:         "the_leviathan_awakened",
@@ -401,7 +401,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "DT2 Bosses",
 			groupOrder:   2,
 			displayOrder: 4,
-			imageURL:     "https://images-ext-1.discordapp.net/external/EU-qGAjrBrJHTaBGu2ge8OdlfwQSaa7KXBiIySkjEzE/%3Fd588a/https/oldschool.runescape.wiki/images/thumb/The_Leviathan.png/280px-The_Leviathan.png?format=webp&quality=lossless&width=560&height=678",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/The_Leviathan.png/280px-The_Leviathan.png",
 		},
 		{
 			slug:         "vardorvis",
@@ -409,7 +409,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "DT2 Bosses",
 			groupOrder:   2,
 			displayOrder: 5,
-			imageURL:     "https://images-ext-1.discordapp.net/external/ae8EoXw18pGzb6jGN7mz_nBXmngRpxLYU7EvMF2yBgA/%3F48af8/https/oldschool.runescape.wiki/images/thumb/Vardorvis.png/200px-Vardorvis.png?format=webp&quality=lossless&width=400&height=726",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Vardorvis.png/200px-Vardorvis.png",
 		},
 		{
 			slug:         "vardorvis_awakened",
@@ -417,7 +417,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "DT2 Bosses",
 			groupOrder:   2,
 			displayOrder: 6,
-			imageURL:     "https://images-ext-1.discordapp.net/external/ae8EoXw18pGzb6jGN7mz_nBXmngRpxLYU7EvMF2yBgA/%3F48af8/https/oldschool.runescape.wiki/images/thumb/Vardorvis.png/200px-Vardorvis.png?format=webp&quality=lossless&width=400&height=726",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Vardorvis.png/200px-Vardorvis.png",
 		},
 		{
 			slug:         "the_whisperer",
@@ -425,7 +425,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "DT2 Bosses",
 			groupOrder:   2,
 			displayOrder: 7,
-			imageURL:     "https://images-ext-1.discordapp.net/external/2BGzggTyy5SGXOwATv45e4BirNX5BgyuAC6tQAxdJMI/%3Faedab/https/oldschool.runescape.wiki/images/thumb/The_Whisperer.png/120px-The_Whisperer.png?format=webp&quality=lossless&width=240&height=612",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/The_Whisperer.png/120px-The_Whisperer.png",
 		},
 		{
 			slug:         "the_whisperer_awakened",
@@ -433,7 +433,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "DT2 Bosses",
 			groupOrder:   2,
 			displayOrder: 8,
-			imageURL:     "https://images-ext-1.discordapp.net/external/2BGzggTyy5SGXOwATv45e4BirNX5BgyuAC6tQAxdJMI/%3Faedab/https/oldschool.runescape.wiki/images/thumb/The_Whisperer.png/120px-The_Whisperer.png?format=webp&quality=lossless&width=240&height=612",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/The_Whisperer.png/120px-The_Whisperer.png",
 		},
 		{
 			slug:         "corrupted_gauntlet",
@@ -441,7 +441,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "Solo & Duo Bosses (A-Z)",
 			groupOrder:   3,
 			displayOrder: 1,
-			imageURL:     "https://images-ext-1.discordapp.net/external/TM8Lco4TM2VThi-hWfMa4Za2lWIGYZibA8wzF0ej5Nk/%3F0cd55/https/oldschool.runescape.wiki/images/thumb/Corrupted_Hunllef.png/280px-Corrupted_Hunllef.png?format=webp&quality=lossless&width=560&height=348",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Corrupted_Hunllef.png/280px-Corrupted_Hunllef.png",
 		},
 		{
 			slug:         "demonic_brutus",
@@ -449,7 +449,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "Solo & Duo Bosses (A-Z)",
 			groupOrder:   3,
 			displayOrder: 2,
-			imageURL:     "https://images-ext-1.discordapp.net/external/v57cc-_eWF5b6t-N3plWnvcYf8m4-zh3qZQPHr5IbzY/%3F2c2d4/https/oldschool.runescape.wiki/images/thumb/Demonic_Brutus.png/232px-Demonic_Brutus.png?format=webp&quality=lossless&width=464&height=344",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Demonic_Brutus.png/232px-Demonic_Brutus.png",
 		},
 		{
 			slug:         "doom_of_mokhaiotl",
@@ -457,7 +457,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "Solo & Duo Bosses (A-Z)",
 			groupOrder:   3,
 			displayOrder: 3,
-			imageURL:     "https://images-ext-1.discordapp.net/external/7IZZB07MIiUU4KmrRMwnQOAnoAnvWdyxQCnhcTOco4A/%3Fe5edb/https/oldschool.runescape.wiki/images/thumb/Doom_of_Mokhaiotl.png/390px-Doom_of_Mokhaiotl.png?format=webp&quality=lossless&width=780&height=554",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Doom_of_Mokhaiotl.png/390px-Doom_of_Mokhaiotl.png",
 		},
 		{
 			slug:         "gauntlet",
@@ -465,7 +465,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "Solo & Duo Bosses (A-Z)",
 			groupOrder:   3,
 			displayOrder: 4,
-			imageURL:     "https://images-ext-1.discordapp.net/external/o8zp8nvdHZuXSEYdBGs4oWLvy6Abe-Lx_UV9x0M5Ry4/%3F7737a/https/oldschool.runescape.wiki/images/thumb/Crystalline_Hunllef.png/320px-Crystalline_Hunllef.png?format=webp&quality=lossless&width=640&height=398",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Crystalline_Hunllef.png/320px-Crystalline_Hunllef.png",
 		},
 		{
 			slug:         "phosanis_nightmare",
@@ -473,7 +473,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "Solo & Duo Bosses (A-Z)",
 			groupOrder:   3,
 			displayOrder: 5,
-			imageURL:     "https://images-ext-1.discordapp.net/external/rrrA0IdKxEp4G4w4R1k8Ess1d9RkZiiy2tbCBFwgfcY/%3F0128a/https/oldschool.runescape.wiki/images/thumb/The_Nightmare.png/250px-The_Nightmare.png?format=webp&quality=lossless&width=500&height=486",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/The_Nightmare.png/250px-The_Nightmare.png",
 		},
 		{
 			slug:         "yama",
@@ -481,7 +481,55 @@ func (s *SQLiteStore) seedPBCategories() error {
 			groupName:    "Solo & Duo Bosses (A-Z)",
 			groupOrder:   3,
 			displayOrder: 6,
-			imageURL:     "https://images-ext-1.discordapp.net/external/7Ucsfxdbg8GiRr-YZEFYKOAR8uA6RkhytaZPjCPQKdk/%3F7653a/https/oldschool.runescape.wiki/images/thumb/Yama.png/230px-Yama.png?format=webp&quality=lossless&width=460&height=420",
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Yama.png/230px-Yama.png",
+		},
+		{
+			slug:         "alchemical_hydra",
+			displayName:  "Alchemical Hydra",
+			groupName:    "Slayer Bosses (A-Z)",
+			groupOrder:   4,
+			displayOrder: 1,
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Alchemical_Hydra_%28electric%29.png/184px-Alchemical_Hydra_%28electric%29.png",
+		},
+		{
+			slug:         "araxxor",
+			displayName:  "Araxxor",
+			groupName:    "Slayer Bosses (A-Z)",
+			groupOrder:   4,
+			displayOrder: 2,
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Araxxor.png/280px-Araxxor.png",
+		},
+		{
+			slug:         "grotesque_guardians",
+			displayName:  "Grotesque Guardians",
+			groupName:    "Slayer Bosses (A-Z)",
+			groupOrder:   4,
+			displayOrder: 3,
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Dusk_%282nd_form%29.png/300px-Dusk_%282nd_form%29.png",
+		},
+		{
+			slug:         "phantom_muspah",
+			displayName:  "Phantom Muspah",
+			groupName:    "Slayer Bosses (A-Z)",
+			groupOrder:   4,
+			displayOrder: 4,
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Phantom_Muspah_%28shielded%29.png/250px-Phantom_Muspah_%28shielded%29.png",
+		},
+		{
+			slug:         "vorkath",
+			displayName:  "Vorkath",
+			groupName:    "Slayer Bosses (A-Z)",
+			groupOrder:   4,
+			displayOrder: 5,
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Vorkath.png/280px-Vorkath.png",
+		},
+		{
+			slug:         "zulrah",
+			displayName:  "Zulrah",
+			groupName:    "Slayer Bosses (A-Z)",
+			groupOrder:   4,
+			displayOrder: 6,
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Zulrah_%28magma%29.png/250px-Zulrah_%28magma%29.png",
 		},
 	}
 

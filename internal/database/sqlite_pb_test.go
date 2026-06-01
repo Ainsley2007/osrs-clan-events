@@ -168,8 +168,8 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActivePBCategories returned error: %v", err)
 	}
-	if len(categories) != 17 {
-		t.Fatalf("expected 17 seeded categories, got %d", len(categories))
+	if len(categories) != 23 {
+		t.Fatalf("expected 23 seeded categories, got %d", len(categories))
 	}
 
 	wantOrder := []string{
@@ -180,6 +180,8 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		"the_whisperer", "the_whisperer_awakened",
 		"corrupted_gauntlet", "demonic_brutus", "doom_of_mokhaiotl",
 		"gauntlet", "phosanis_nightmare", "yama",
+		"alchemical_hydra", "araxxor", "grotesque_guardians",
+		"phantom_muspah", "vorkath", "zulrah",
 	}
 	for i, slug := range wantOrder {
 		if categories[i].Slug != slug {
@@ -217,7 +219,7 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		t.Fatalf("expected awakened duke to reuse normal duke thumbnail")
 	}
 
-	soloDuoGroup := categories[11:]
+	soloDuoGroup := categories[11:17]
 	if len(soloDuoGroup) != 6 {
 		t.Fatalf("expected 6 solo & duo categories, got %d", len(soloDuoGroup))
 	}
@@ -227,6 +229,22 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		}
 		if category.GroupOrder != 3 {
 			t.Fatalf("expected group_order 3 for %s, got %d", category.Slug, category.GroupOrder)
+		}
+		if category.DisplayOrder != i+1 {
+			t.Fatalf("display order mismatch for %s: got %d want %d", category.Slug, category.DisplayOrder, i+1)
+		}
+	}
+
+	slayerGroup := categories[17:]
+	if len(slayerGroup) != 6 {
+		t.Fatalf("expected 6 slayer boss categories, got %d", len(slayerGroup))
+	}
+	for i, category := range slayerGroup {
+		if category.GroupName != "Slayer Bosses (A-Z)" {
+			t.Fatalf("expected Slayer Bosses (A-Z) group for %s, got %s", category.Slug, category.GroupName)
+		}
+		if category.GroupOrder != 4 {
+			t.Fatalf("expected group_order 4 for %s, got %d", category.Slug, category.GroupOrder)
 		}
 		if category.DisplayOrder != i+1 {
 			t.Fatalf("display order mismatch for %s: got %d want %d", category.Slug, category.DisplayOrder, i+1)
