@@ -7,7 +7,7 @@ import (
 	"osrs-events/internal/database"
 )
 
-func TestBuildQuickLinksEmbed_IncludesRulesAndCategoryLists(t *testing.T) {
+func TestBuildQuickLinksEmbed_ClickableGroupTitlesAndBullets(t *testing.T) {
 	groups := []*pbCategoryGroup{
 		submissionRulesGroup(),
 		{
@@ -28,13 +28,27 @@ func TestBuildQuickLinksEmbed_IncludesRulesAndCategoryLists(t *testing.T) {
 	if embed.Title != QuickLinksEmbedTitle {
 		t.Fatalf("title: got %q", embed.Title)
 	}
-	if !strings.Contains(embed.Description, "[Submission Rules](https://discord.com/channels/g1/ch1/msg-rules)") {
-		t.Fatalf("expected rules jump link, got %q", embed.Description)
+	if len(embed.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(embed.Fields))
 	}
-	if !strings.Contains(embed.Description, "The Inferno, Fight Caves") {
-		t.Fatalf("expected category list for minigames, got %q", embed.Description)
+
+	rules := embed.Fields[0]
+	if rules.Name != quickLinksHiddenFieldName {
+		t.Fatalf("expected hidden field name, got %q", rules.Name)
 	}
-	if strings.Contains(embed.Description, "Submission Rules —") {
-		t.Fatalf("rules line should not have category suffix, got %q", embed.Description)
+	rulesLink := "[Submission Rules](https://discord.com/channels/g1/ch1/msg-rules)"
+	if rules.Value != rulesLink {
+		t.Fatalf("rules value: got %q want %q", rules.Value, rulesLink)
+	}
+	if strings.Contains(rules.Value, "View section") {
+		t.Fatalf("rules should not include view section label, got %q", rules.Value)
+	}
+
+	minigames := embed.Fields[1]
+	if !strings.HasPrefix(minigames.Value, "[Minigames](https://discord.com/channels/g1/ch1/msg-minigames)") {
+		t.Fatalf("expected clickable group title, got %q", minigames.Value)
+	}
+	if !strings.Contains(minigames.Value, "• The Inferno") || !strings.Contains(minigames.Value, "• Fight Caves") {
+		t.Fatalf("expected bullet categories, got %q", minigames.Value)
 	}
 }

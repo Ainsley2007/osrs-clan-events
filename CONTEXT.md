@@ -27,7 +27,7 @@ The single Discord message for one Leaderboard Group, containing group header te
 _Avoid_: Per-category message, proof post
 
 **Quick Links**:
-The message at the bottom of the PB leaderboard channel: jump links to each Leaderboard Group (including Submission Rules) plus a plain-text list of PB Categories in that group so players know which bosses each section contains.
+The message at the bottom of the PB leaderboard channel: one section per Leaderboard Group with a jump link and a list of PB Categories in that group so players can navigate the channel and see which bosses each section contains.
 _Avoid_: Leaderboard title, per-category jump links, proof post
 
 **Global Rebuild**:
