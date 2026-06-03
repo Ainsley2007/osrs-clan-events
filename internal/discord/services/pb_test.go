@@ -290,6 +290,62 @@ func (m *mockPBStore) DeletePBGroupBundleMessagesByGuild(context.Context, string
 	return nil
 }
 
+type mockModerationGateStore struct {
+	mockPBStore
+	guild      *database.Guild
+	pending    *database.PBSubmission
+	pendingErr error
+}
+
+func (m *mockModerationGateStore) GetGuild(context.Context, string) (*database.Guild, error) {
+	return m.guild, nil
+}
+
+func (m *mockModerationGateStore) GetPendingPBSubmissionByProofMessageID(context.Context, string, string) (*database.PBSubmission, error) {
+	if m.pendingErr != nil {
+		return nil, m.pendingErr
+	}
+	if m.pending == nil {
+		return nil, fmt.Errorf("pb submission not found")
+	}
+	return m.pending, nil
+}
+
+func TestPendingProofSubmissionForReaction_RequiresProofQueueAndPendingRow(t *testing.T) {
+	pending := &database.PBSubmission{ID: 1, GuildID: "g1"}
+	proofsChannel := "proofs-ch"
+
+	t.Run("wrong channel", func(t *testing.T) {
+		service := &PBService{store: &mockModerationGateStore{
+			guild:   &database.Guild{GuildID: "g1", PbProofsChannelID: proofsChannel},
+			pending: pending,
+		}}
+		if _, ok := service.PendingProofSubmissionForReaction(context.Background(), "g1", "other-ch", "msg-1"); ok {
+			t.Fatal("expected false for non-proof-queue channel")
+		}
+	})
+
+	t.Run("no pending submission", func(t *testing.T) {
+		service := &PBService{store: &mockModerationGateStore{
+			guild: &database.Guild{GuildID: "g1", PbProofsChannelID: proofsChannel},
+		}}
+		if _, ok := service.PendingProofSubmissionForReaction(context.Background(), "g1", proofsChannel, "msg-1"); ok {
+			t.Fatal("expected false when no pending submission")
+		}
+	})
+
+	t.Run("proof queue pending submission", func(t *testing.T) {
+		service := &PBService{store: &mockModerationGateStore{
+			guild:   &database.Guild{GuildID: "g1", PbProofsChannelID: proofsChannel},
+			pending: pending,
+		}}
+		got, ok := service.PendingProofSubmissionForReaction(context.Background(), "g1", proofsChannel, "msg-1")
+		if !ok || got == nil || got.ID != 1 {
+			t.Fatalf("expected pending submission, got ok=%v submission=%v", ok, got)
+		}
+	})
+}
+
 func TestAllLeaderboardGroups_SubmissionRulesFirst(t *testing.T) {
 	store := &mockPBStore{
 		activeCategories: []*database.PBCategory{

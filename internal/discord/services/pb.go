@@ -184,6 +184,18 @@ func (s *PBService) SubmitPB(ctx context.Context, input *PBSubmissionInput) (*da
 	return submission, category, nil
 }
 
+func (s *PBService) PendingProofSubmissionForReaction(ctx context.Context, guildID, channelID, proofMessageID string) (*database.PBSubmission, bool) {
+	guild, err := s.store.GetGuild(ctx, guildID)
+	if err != nil || guild.PbProofsChannelID == "" || guild.PbProofsChannelID != channelID {
+		return nil, false
+	}
+	submission, err := s.store.GetPendingPBSubmissionByProofMessageID(ctx, guildID, proofMessageID)
+	if err != nil {
+		return nil, false
+	}
+	return submission, true
+}
+
 func (s *PBService) HandleApproval(ctx context.Context, guildID, proofMessageID, reviewerDiscordID string) (*PBModerationResult, error) {
 	submission, err := s.store.GetPendingPBSubmissionByProofMessageID(ctx, guildID, proofMessageID)
 	if err != nil {

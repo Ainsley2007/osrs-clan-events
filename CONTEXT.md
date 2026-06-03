@@ -82,6 +82,10 @@ _Avoid_: Shared leaderboard lane, mode flag on one category
 The moderation stream of Pending Submissions shown in the `pb-proofs` channel.
 _Avoid_: Leaderboard feed, audit log
 
+**PB Moderation Reaction**:
+An admin ✅ or ❌ reaction on a Pending Submission proof post in the Proof Queue; reactions elsewhere are ignored.
+_Avoid_: General emoji use, leaderboard reactions
+
 **Reviewed Submission**:
 A PB Submission that already has a final moderation decision and can no longer be decided again.
 _Avoid_: Pending submission, duplicate decision

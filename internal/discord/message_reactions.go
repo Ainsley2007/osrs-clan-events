@@ -29,6 +29,10 @@ func (b *Bot) messageReactionAdd(s *discordgo.Session, event *discordgo.MessageR
 	ctx, cancel := cmdContext()
 	defer cancel()
 
+	if _, ok := b.PBService.PendingProofSubmissionForReaction(ctx, event.GuildID, event.ChannelID, event.MessageID); !ok {
+		return
+	}
+
 	if emoji == services.PBRejectEmoji {
 		submission, err := b.PBService.HandleRejection(ctx, event.GuildID, event.MessageID, event.UserID)
 		if err != nil {
