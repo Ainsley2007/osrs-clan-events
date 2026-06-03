@@ -55,6 +55,10 @@ func TestPBSubmissionModerationLifecycle(t *testing.T) {
 	if _, err := store.GetPendingPBSubmissionByProofMessageID(ctx, "g1", "msg-1"); err == nil {
 		t.Fatalf("expected pending lookup to fail after approval")
 	}
+
+	if err := store.ApprovePBSubmission(ctx, sub.ID, "admin-1", now); err != ErrPBSubmissionNotPending {
+		t.Fatalf("expected ErrPBSubmissionNotPending on second approve, got %v", err)
+	}
 }
 
 func TestUpsertPBRecordIfBetter(t *testing.T) {

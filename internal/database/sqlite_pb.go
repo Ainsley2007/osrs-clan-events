@@ -165,7 +165,7 @@ func (s *SQLiteStore) updatePBSubmissionStatus(ctx context.Context, submissionID
 		UPDATE pb_submissions
 		SET status = ?, reviewed_by_discord_id = ?, reviewed_at = ?, updated_at = ?
 		WHERE id = ? AND status = ?`
-	if _, err := s.db.ExecContext(
+	res, err := s.db.ExecContext(
 		ctx,
 		query,
 		status,
@@ -174,8 +174,16 @@ func (s *SQLiteStore) updatePBSubmissionStatus(ctx context.Context, submissionID
 		reviewedAt,
 		submissionID,
 		pbSubmissionStatusPending,
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to update pb submission status: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to read pb submission update rows: %w", err)
+	}
+	if rows == 0 {
+		return ErrPBSubmissionNotPending
 	}
 	return nil
 }

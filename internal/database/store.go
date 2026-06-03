@@ -6,7 +6,10 @@ import (
 	"time"
 )
 
-var ErrNoActiveEvent = errors.New("no active event found")
+var (
+	ErrNoActiveEvent            = errors.New("no active event found")
+	ErrPBSubmissionNotPending   = errors.New("pb submission is not pending")
+)
 
 type Guild struct {
 	GuildID                string

@@ -2,11 +2,13 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"osrs-events/internal/database"
@@ -27,14 +29,26 @@ type PBService struct {
 	store   PBStore
 	session *discordgo.Session
 	logger  Logger
+
+	moderationMu                sync.Mutex
+	guildRefreshLocks           map[string]*sync.Mutex
+	leaderboardRefreshDebouncer *guildWorkDebouncer
 }
 
 func NewPBService(store PBStore, session *discordgo.Session, logger Logger) *PBService {
-	return &PBService{
+	s := &PBService{
 		store:   store,
 		session: session,
 		logger:  logger,
 	}
+	s.leaderboardRefreshDebouncer = newGuildWorkDebouncer(pbLeaderboardRefreshDebounce, func(guildID string) {
+		s.runDebouncedGuildLeaderboardRefresh(guildID)
+	})
+	return s
+}
+
+func IsPBSubmissionAlreadyReviewed(err error) bool {
+	return errors.Is(err, database.ErrPBSubmissionNotPending)
 }
 
 type PBSubmissionInput struct {
@@ -231,10 +245,6 @@ func (s *PBService) HandleApproval(ctx context.Context, guildID, proofMessageID,
 	category, err := s.store.GetPBCategoryBySlug(ctx, submission.CategorySlug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load pb category: %w", err)
-	}
-
-	if err := s.RefreshGroupBundle(ctx, guildID, category.GroupName); err != nil {
-		return nil, err
 	}
 
 	return &PBModerationResult{

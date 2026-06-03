@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -26,32 +25,59 @@ func (b *Bot) messageReactionAdd(s *discordgo.Session, event *discordgo.MessageR
 		return
 	}
 
+	guildID := event.GuildID
+	channelID := event.ChannelID
+	messageID := event.MessageID
+	userID := event.UserID
+
+	if emoji == services.PBRejectEmoji {
+		go b.runPBRejectionFollowUp(s, guildID, channelID, messageID, userID)
+		return
+	}
+
+	go b.runPBApprovalFollowUp(guildID, channelID, messageID, userID)
+}
+
+func (b *Bot) runPBApprovalFollowUp(guildID, channelID, messageID, userID string) {
 	ctx, cancel := cmdContext()
 	defer cancel()
 
-	if _, ok := b.PBService.PendingProofSubmissionForReaction(ctx, event.GuildID, event.ChannelID, event.MessageID); !ok {
+	if _, ok := b.PBService.PendingProofSubmissionForReaction(ctx, guildID, channelID, messageID); !ok {
 		return
 	}
 
-	if emoji == services.PBRejectEmoji {
-		submission, err := b.PBService.HandleRejection(ctx, event.GuildID, event.MessageID, event.UserID)
-		if err != nil {
+	result, err := b.PBService.HandleApproval(ctx, guildID, messageID, userID)
+	if err != nil {
+		if services.IsPBSubmissionAlreadyReviewed(err) {
 			return
 		}
-		if submission.ProofMessageID != nil {
-			if err := s.ChannelMessageDelete(event.ChannelID, *submission.ProofMessageID); err != nil {
-				log.Printf("failed to delete rejected pb proof message %s: %v", *submission.ProofMessageID, err)
-			}
-		}
+		log.Printf("pb approval failed for message %s in guild %s: %v", messageID, guildID, err)
 		return
 	}
 
-	result, err := b.PBService.HandleApproval(ctx, event.GuildID, event.MessageID, event.UserID)
-	if err != nil {
-		_, _ = s.ChannelMessageSend(event.ChannelID, fmt.Sprintf("⚠️ Could not approve PB submission: %v", err))
+	b.PBService.RunApprovalFollowUp(channelID, result, userID, time.Now().UTC())
+}
+
+func (b *Bot) runPBRejectionFollowUp(s *discordgo.Session, guildID, channelID, messageID, userID string) {
+	ctx, cancel := cmdContext()
+	defer cancel()
+
+	if _, ok := b.PBService.PendingProofSubmissionForReaction(ctx, guildID, channelID, messageID); !ok {
 		return
 	}
-	if err := b.PBService.MarkProofSubmissionAccepted(event.ChannelID, result, event.UserID, time.Now().UTC()); err != nil {
-		log.Printf("failed to mark accepted proof message reviewed: %v", err)
+
+	submission, err := b.PBService.HandleRejection(ctx, guildID, messageID, userID)
+	if err != nil {
+		if services.IsPBSubmissionAlreadyReviewed(err) {
+			return
+		}
+		log.Printf("pb rejection failed for message %s in guild %s: %v", messageID, guildID, err)
+		return
+	}
+
+	if submission.ProofMessageID != nil {
+		if err := s.ChannelMessageDelete(channelID, *submission.ProofMessageID); err != nil {
+			log.Printf("failed to delete rejected pb proof message %s: %v", *submission.ProofMessageID, err)
+		}
 	}
 }
