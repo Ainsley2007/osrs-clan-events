@@ -552,6 +552,30 @@ func (s *SQLiteStore) seedPBCategories() error {
 			displayOrder: 6,
 			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Zulrah_%28magma%29.png/250px-Zulrah_%28magma%29.png",
 		},
+		{
+			slug:         "toa_expert_300_solo",
+			displayName:  "TOA Expert 300 Solo",
+			groupName:    "Tombs of Amascut",
+			groupOrder:   5,
+			displayOrder: 1,
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Elidinis%27_Warden_%28level-544%29.png/250px-Elidinis%27_Warden_%28level-544%29.png",
+		},
+		{
+			slug:         "toa_expert_500_solo",
+			displayName:  "TOA Expert 500 Solo",
+			groupName:    "Tombs of Amascut",
+			groupOrder:   5,
+			displayOrder: 2,
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Tumeken%27s_Guardian_%28follower%29.png/250px-Tumeken%27s_Guardian_%28follower%29.png",
+		},
+		{
+			slug:         "toa_expert_400_4man",
+			displayName:  "TOA Expert 400 4-man",
+			groupName:    "Tombs of Amascut",
+			groupOrder:   5,
+			displayOrder: 3,
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Akkhito_%28follower%29.png/147px-Akkhito_%28follower%29.png",
+		},
 	}
 
 	for _, seed := range seeds {

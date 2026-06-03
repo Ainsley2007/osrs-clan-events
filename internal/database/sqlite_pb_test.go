@@ -174,8 +174,8 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActivePBCategories returned error: %v", err)
 	}
-	if len(categories) != 23 {
-		t.Fatalf("expected 23 seeded categories, got %d", len(categories))
+	if len(categories) != 26 {
+		t.Fatalf("expected 26 seeded categories, got %d", len(categories))
 	}
 
 	wantOrder := []string{
@@ -188,6 +188,7 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		"gauntlet", "phosanis_nightmare", "yama",
 		"alchemical_hydra", "araxxor", "grotesque_guardians",
 		"phantom_muspah", "vorkath", "zulrah",
+		"toa_expert_300_solo", "toa_expert_500_solo", "toa_expert_400_4man",
 	}
 	for i, slug := range wantOrder {
 		if categories[i].Slug != slug {
@@ -241,7 +242,7 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		}
 	}
 
-	slayerGroup := categories[17:]
+	slayerGroup := categories[17:23]
 	if len(slayerGroup) != 6 {
 		t.Fatalf("expected 6 slayer boss categories, got %d", len(slayerGroup))
 	}
@@ -251,6 +252,22 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		}
 		if category.GroupOrder != 4 {
 			t.Fatalf("expected group_order 4 for %s, got %d", category.Slug, category.GroupOrder)
+		}
+		if category.DisplayOrder != i+1 {
+			t.Fatalf("display order mismatch for %s: got %d want %d", category.Slug, category.DisplayOrder, i+1)
+		}
+	}
+
+	toaGroup := categories[23:]
+	if len(toaGroup) != 3 {
+		t.Fatalf("expected 3 Tombs of Amascut categories, got %d", len(toaGroup))
+	}
+	for i, category := range toaGroup {
+		if category.GroupName != "Tombs of Amascut" {
+			t.Fatalf("expected Tombs of Amascut group for %s, got %s", category.Slug, category.GroupName)
+		}
+		if category.GroupOrder != 5 {
+			t.Fatalf("expected group_order 5 for %s, got %d", category.Slug, category.GroupOrder)
 		}
 		if category.DisplayOrder != i+1 {
 			t.Fatalf("display order mismatch for %s: got %d want %d", category.Slug, category.DisplayOrder, i+1)

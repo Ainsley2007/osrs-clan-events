@@ -11,7 +11,7 @@ A named leaderboard lane for one activity (for example `inferno`) with its own r
 _Avoid_: Event type, boss category
 
 **Leaderboard Group**:
-A named bundle rendered together in one Discord message (for example `Minigames`), made up of PB Category boards and optionally other fixed content.
+A named bundle rendered together in one Discord message (for example `Minigames`, `Tombs of Amascut`), made up of PB Category boards and optionally other fixed content.
 _Avoid_: Category, channel section
 
 **Submission Rules**:
@@ -75,7 +75,7 @@ When multiple Accepted PBs share the same canonical time at one PB Leaderboard P
 _Avoid_: Hidden tie, single winner per place
 
 **PB Category Variant**:
-A separate PB Category for an alternate ruleset of the same activity (for example `duke_sucellus_awakened` alongside `duke_sucellus`), with its own ranking and Accepted PB.
+A separate PB Category for an alternate ruleset of the same activity (for example `duke_sucellus_awakened` alongside `duke_sucellus`, or Expert 300 Solo vs Expert 500 Solo under **Tombs of Amascut**), with its own ranking and Accepted PB.
 _Avoid_: Shared leaderboard lane, mode flag on one category
 
 **Proof Queue**:
