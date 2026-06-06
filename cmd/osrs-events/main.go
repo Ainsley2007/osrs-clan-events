@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"osrs-events/internal/config"
@@ -72,20 +73,17 @@ func main() {
 	log.Println("OSRS API client initialized successfully")
 
 	// ─── Proof storage (Cloudflare R2) ─────────────────────────────
-	var proofStore proofstorage.Store
-	if cfg.R2.Enabled() {
-		r2Store, err := proofstorage.NewR2Store(cfg.R2)
-		if err != nil {
-			log.Fatalf("Failed to initialize R2 proof storage: %v", err)
-		}
-		proofStore = r2Store
-		log.Println("R2 proof storage initialized successfully")
-	} else {
-		log.Println("R2 proof storage is not configured; PB approvals will fail until R2 env vars are set")
+	if missing := cfg.R2.MissingEnvVars(); len(missing) > 0 {
+		log.Fatalf("R2 proof storage is required but not configured. Missing or empty: %s", strings.Join(missing, ", "))
 	}
+	r2Store, err := proofstorage.NewR2Store(cfg.R2)
+	if err != nil {
+		log.Fatalf("Failed to initialize R2 proof storage: %v", err)
+	}
+	log.Println("R2 proof storage initialized successfully")
 
 	// ─── Discord bot ──────────────────────────────────────────────
-	bot, err := discord.New(cfg.DiscordToken, db, osrsClient, remoteConfigClient, proofStore)
+	bot, err := discord.New(cfg.DiscordToken, db, osrsClient, remoteConfigClient, r2Store)
 	if err != nil {
 		log.Fatalf("Failed to create Discord bot: %v", err)
 	}

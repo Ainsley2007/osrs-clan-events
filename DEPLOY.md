@@ -59,7 +59,19 @@ R2_PUBLIC_BASE_URL=https://pub-xxxxx.r2.dev
 2. Enable public access on the bucket and copy the `r2.dev` base URL for `R2_PUBLIC_BASE_URL`.
 3. Find your account ID in the Cloudflare dashboard (R2 overview) for `R2_ACCOUNT_ID`.
 
-PB approvals persist proof images to R2 at moderation time. If R2 is not configured, the bot starts but PB approvals fail until these variables are set.
+PB approvals persist proof images to R2 at moderation time. The bot will not start until all `R2_*` variables are set.
+
+**After changing `.env`**, recreate the container so Docker reloads env vars — `docker restart` is not enough:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --force-recreate
+```
+
+To verify R2 vars reached the running container (prints set/MISSING only, not values):
+
+```bash
+docker exec osrs-events sh -c 'for k in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_PUBLIC_BASE_URL; do eval "v=\$$k"; if [ -n "$v" ]; then echo "$k=set"; else echo "$k=MISSING"; fi; done'
+```
 
 **Copy your Firebase key file** into that directory as `firebase-credentials.json`:
 

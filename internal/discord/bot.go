@@ -207,7 +207,7 @@ func (b *Bot) initializeGuildAsync(guildID string) {
 		b.mu.Unlock()
 	}()
 
-	ctx, cancel := cmdContext()
+	ctx, cancel := guildInitContext()
 	defer cancel()
 	if err := b.InitializerService.InitializeGuild(ctx, guildID); err != nil {
 		log.Printf("Failed to initialize guild %s: %v", guildID, err)

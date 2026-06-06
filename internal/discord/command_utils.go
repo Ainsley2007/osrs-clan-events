@@ -11,9 +11,14 @@ import (
 )
 
 const cmdTimeout = 30 * time.Second
+const guildInitTimeout = 3 * time.Minute
 
 func cmdContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), cmdTimeout)
+}
+
+func guildInitContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), guildInitTimeout)
 }
 
 func ptr[T any](v T) *T { return &v }

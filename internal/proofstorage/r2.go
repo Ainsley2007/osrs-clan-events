@@ -1,6 +1,7 @@
 package proofstorage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -22,11 +23,27 @@ type R2Config struct {
 }
 
 func (c R2Config) Enabled() bool {
-	return strings.TrimSpace(c.AccountID) != "" &&
-		strings.TrimSpace(c.AccessKeyID) != "" &&
-		strings.TrimSpace(c.SecretAccessKey) != "" &&
-		strings.TrimSpace(c.Bucket) != "" &&
-		strings.TrimSpace(c.PublicBaseURL) != ""
+	return len(c.MissingEnvVars()) == 0
+}
+
+func (c R2Config) MissingEnvVars() []string {
+	checks := []struct {
+		name  string
+		value string
+	}{
+		{"R2_ACCOUNT_ID", c.AccountID},
+		{"R2_ACCESS_KEY_ID", c.AccessKeyID},
+		{"R2_SECRET_ACCESS_KEY", c.SecretAccessKey},
+		{"R2_BUCKET", c.Bucket},
+		{"R2_PUBLIC_BASE_URL", c.PublicBaseURL},
+	}
+	var missing []string
+	for _, check := range checks {
+		if strings.TrimSpace(check.value) == "" {
+			missing = append(missing, check.name)
+		}
+	}
+	return missing
 }
 
 type R2Store struct {
@@ -57,26 +74,72 @@ func NewR2Store(cfg R2Config) (*R2Store, error) {
 	}, nil
 }
 
+const (
+	healthCheckKey = "_healthcheck/r2-check.png"
+	maxProofBytes  = 10 << 20 // 10 MiB
+)
+
 func (s *R2Store) PersistFromURL(ctx context.Context, submissionID int64, sourceURL string) (string, error) {
-	body, contentType, err := s.download(ctx, sourceURL)
+	data, contentType, err := s.download(ctx, sourceURL)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrUnavailableProof, err)
 	}
-	defer body.Close()
 
 	ext := extensionFromResponse(sourceURL, contentType)
 	key := ObjectKey(submissionID, ext)
 
 	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(s.bucket),
-		Key:         aws.String(key),
-		Body:        body,
-		ContentType: aws.String(contentType),
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(key),
+		Body:          bytes.NewReader(data),
+		ContentLength: aws.Int64(int64(len(data))),
+		ContentType:   aws.String(contentType),
 	}); err != nil {
 		return "", fmt.Errorf("%w: upload failed: %v", ErrUnavailableProof, err)
 	}
 
 	return PublicURL(s.publicBaseURL, key), nil
+}
+
+// HealthCheck verifies credentials, bucket access, upload, and delete.
+func (s *R2Store) HealthCheck(ctx context.Context) (publicURL string, err error) {
+	if _, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(s.bucket),
+	}); err != nil {
+		return "", fmt.Errorf("head bucket: %w", err)
+	}
+
+	body := bytes.NewReader(minPNG)
+	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(healthCheckKey),
+		Body:          body,
+		ContentLength: aws.Int64(int64(len(minPNG))),
+		ContentType:   aws.String("image/png"),
+	}); err != nil {
+		return "", fmt.Errorf("upload health check object: %w", err)
+	}
+
+	if _, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(healthCheckKey),
+	}); err != nil {
+		return "", fmt.Errorf("delete health check object: %w", err)
+	}
+
+	return PublicURL(s.publicBaseURL, healthCheckKey), nil
+}
+
+var minPNG = []byte{
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+	0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+	0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+	0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
+	0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+	0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
+	0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+	0x42, 0x60, 0x82,
 }
 
 func (s *R2Store) DeleteBySubmissionID(ctx context.Context, submissionID int64) error {
@@ -107,7 +170,7 @@ func (s *R2Store) DeleteBySubmissionID(ctx context.Context, submissionID int64) 
 	return deleteErr
 }
 
-func (s *R2Store) download(ctx context.Context, sourceURL string) (io.ReadCloser, string, error) {
+func (s *R2Store) download(ctx context.Context, sourceURL string) ([]byte, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
 	if err != nil {
 		return nil, "", fmt.Errorf("create download request: %w", err)
@@ -117,14 +180,23 @@ func (s *R2Store) download(ctx context.Context, sourceURL string) (io.ReadCloser
 	if err != nil {
 		return nil, "", fmt.Errorf("download proof: %w", err)
 	}
+	defer resp.Body.Close()
+
 	if !isSuccessStatus(resp.StatusCode) {
-		resp.Body.Close()
 		return nil, "", fmt.Errorf("download proof: HTTP %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxProofBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("read proof body: %w", err)
+	}
+	if len(data) > maxProofBytes {
+		return nil, "", fmt.Errorf("download proof: file too large")
 	}
 
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	return resp.Body, contentType, nil
+	return data, contentType, nil
 }
