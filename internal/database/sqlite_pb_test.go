@@ -174,8 +174,8 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActivePBCategories returned error: %v", err)
 	}
-	if len(categories) != 26 {
-		t.Fatalf("expected 26 seeded categories, got %d", len(categories))
+	if len(categories) != 30 {
+		t.Fatalf("expected 30 seeded categories, got %d", len(categories))
 	}
 
 	wantOrder := []string{
@@ -188,6 +188,8 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		"gauntlet", "phosanis_nightmare", "yama",
 		"alchemical_hydra", "araxxor", "grotesque_guardians",
 		"phantom_muspah", "vorkath", "zulrah",
+		"cox_solo", "cox_trio",
+		"cox_cm_solo", "cox_cm_trio",
 		"toa_expert_300_solo", "toa_expert_500_solo", "toa_expert_400_4man",
 	}
 	for i, slug := range wantOrder {
@@ -258,7 +260,39 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		}
 	}
 
-	toaGroup := categories[23:]
+	coxNormalGroup := categories[23:25]
+	if len(coxNormalGroup) != 2 {
+		t.Fatalf("expected 2 Chambers of Xeric - Normal categories, got %d", len(coxNormalGroup))
+	}
+	for i, category := range coxNormalGroup {
+		if category.GroupName != "Chambers of Xeric - Normal" {
+			t.Fatalf("expected Chambers of Xeric - Normal group for %s, got %s", category.Slug, category.GroupName)
+		}
+		if category.GroupOrder != 5 {
+			t.Fatalf("expected group_order 5 for %s, got %d", category.Slug, category.GroupOrder)
+		}
+		if category.DisplayOrder != i+1 {
+			t.Fatalf("display order mismatch for %s: got %d want %d", category.Slug, category.DisplayOrder, i+1)
+		}
+	}
+
+	coxCMGroup := categories[25:27]
+	if len(coxCMGroup) != 2 {
+		t.Fatalf("expected 2 Chambers of Xeric - Challenge Mode categories, got %d", len(coxCMGroup))
+	}
+	for i, category := range coxCMGroup {
+		if category.GroupName != "Chambers of Xeric - Challenge Mode" {
+			t.Fatalf("expected Chambers of Xeric - Challenge Mode group for %s, got %s", category.Slug, category.GroupName)
+		}
+		if category.GroupOrder != 6 {
+			t.Fatalf("expected group_order 6 for %s, got %d", category.Slug, category.GroupOrder)
+		}
+		if category.DisplayOrder != i+1 {
+			t.Fatalf("display order mismatch for %s: got %d want %d", category.Slug, category.DisplayOrder, i+1)
+		}
+	}
+
+	toaGroup := categories[27:]
 	if len(toaGroup) != 3 {
 		t.Fatalf("expected 3 Tombs of Amascut categories, got %d", len(toaGroup))
 	}
@@ -266,8 +300,8 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		if category.GroupName != "Tombs of Amascut" {
 			t.Fatalf("expected Tombs of Amascut group for %s, got %s", category.Slug, category.GroupName)
 		}
-		if category.GroupOrder != 5 {
-			t.Fatalf("expected group_order 5 for %s, got %d", category.Slug, category.GroupOrder)
+		if category.GroupOrder != 7 {
+			t.Fatalf("expected group_order 7 for %s, got %d", category.Slug, category.GroupOrder)
 		}
 		if category.DisplayOrder != i+1 {
 			t.Fatalf("display order mismatch for %s: got %d want %d", category.Slug, category.DisplayOrder, i+1)

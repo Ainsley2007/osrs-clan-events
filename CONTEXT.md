@@ -35,15 +35,27 @@ A recovery action that removes all PB group bundle messages and Quick Links for 
 _Avoid_: Partial fix, single-message patch
 
 **PB Submission**:
-A user-submitted proof payload for a PB Category, containing proof media and a declared time until moderation resolves it.
+A user-submitted proof payload for a PB Category, containing Proof Media and a declared time until moderation resolves it.
 _Avoid_: Run record, final PB
+
+**Proof Media**:
+The screenshot image attached to a PB Submission as evidence of the run.
+_Avoid_: Discord attachment, embed thumbnail
+
+**Proof URL**:
+The durable public URL to Proof Media for an Accepted PB, assigned when the submission is approved and retained for the life of that record.
+_Avoid_: Discord CDN link, submission attachment URL
+
+**Legacy Proof URL**:
+A Proof URL on an Accepted PB that still points at a Discord attachment from before durable storage was introduced; not backfilled and may no longer work.
+_Avoid_: Migration target, pending submission link
 
 **Valid Declared Time**:
 A declared time that matches the standard in-game time format and can be ranked on the leaderboard.
 _Avoid_: Free-text guess, moderator-edited time
 
 **Pending Submission**:
-A PB Submission with a Valid Declared Time that is in the Proof Queue and awaiting moderator decision.
+A PB Submission with a Valid Declared Time that is in the Proof Queue and awaiting moderator decision; Proof Media is shown via the Discord attachment URL from submit until moderation resolves.
 _Avoid_: Approved submission, archived submission
 
 **PB Submitter**:
@@ -59,7 +71,7 @@ The name line shown on a PB Category board: PB Submitter first, then PB Teammate
 _Avoid_: RSN, Discord handle only
 
 **Accepted PB**:
-The fastest approved time for one PB Submitter in one guild and one PB Category, shown on the board with its Leaderboard Display Name.
+The fastest approved time for one PB Submitter in one guild and one PB Category, shown on the board with its Leaderboard Display Name and Proof URL.
 _Avoid_: Latest PB, any approved run
 
 **PB Leaderboard Place**:
@@ -85,6 +97,10 @@ _Avoid_: Leaderboard feed, audit log
 **PB Moderation Reaction**:
 An admin ✅ or ❌ reaction on a Pending Submission proof post in the Proof Queue; reactions elsewhere are ignored.
 _Avoid_: General emoji use, leaderboard reactions
+
+**Unavailable Submission Proof**:
+Proof Media that can no longer be retrieved from the Discord attachment URL at approval time; approval is blocked and the Pending Submission stays in the Proof Queue until the submitter resubmits.
+_Avoid_: Accepted PB without proof, silent approval
 
 **Reviewed Submission**:
 A PB Submission that already has a final moderation decision and can no longer be decided again.
