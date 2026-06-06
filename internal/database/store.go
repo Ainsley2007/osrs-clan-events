@@ -9,6 +9,7 @@ import (
 var (
 	ErrNoActiveEvent            = errors.New("no active event found")
 	ErrPBSubmissionNotPending   = errors.New("pb submission is not pending")
+	ErrPBRecordNotFound         = errors.New("pb record not found")
 )
 
 type Guild struct {
@@ -214,6 +215,7 @@ type Store interface {
 	ApprovePBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error
 	RejectPBSubmission(ctx context.Context, submissionID int64, reviewerDiscordID string, reviewedAt time.Time) error
 	UpsertPBRecordIfBetter(ctx context.Context, record *PBRecord) (bool, error)
+	GetPBRecordByUserAndCategory(ctx context.Context, guildID, categorySlug, discordUserID string) (*PBRecord, error)
 	GetPBRecordsByCategory(ctx context.Context, guildID, categorySlug string) ([]*PBRecord, error)
 	GetPBGroupBundleMessage(ctx context.Context, guildID, groupName string) (*PBLeaderboardMessage, error)
 	UpsertPBGroupBundleMessage(ctx context.Context, message *PBLeaderboardMessage) error

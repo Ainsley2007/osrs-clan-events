@@ -8,6 +8,7 @@ import (
 	"osrs-events/internal/discord/services"
 	"osrs-events/internal/firebase"
 	"osrs-events/internal/osrs"
+	"osrs-events/internal/proofstorage"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -32,7 +33,7 @@ type Bot struct {
 	logger         *log.Logger
 }
 
-func New(token string, store database.Store, osrsClient *osrs.Client, firebaseClient *firebase.RemoteConfigClient) (*Bot, error) {
+func New(token string, store database.Store, osrsClient *osrs.Client, firebaseClient *firebase.RemoteConfigClient, proofStore proofstorage.Store) (*Bot, error) {
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return nil, err
@@ -47,7 +48,7 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 	accountService := services.NewAccountService(store, snapshotService, leaderboardService, logger)
 	participantService := services.NewParticipantService(store)
 	donationService := services.NewDonationService(store, dg, logger)
-	pbService := services.NewPBService(store, dg, logger)
+	pbService := services.NewPBService(store, proofStore, dg, logger)
 	initializerService := services.NewInitializerService(dg, store, leaderboardService, pbService)
 	statsService := services.NewStatsService(store)
 

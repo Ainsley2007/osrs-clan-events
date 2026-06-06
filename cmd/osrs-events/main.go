@@ -14,6 +14,7 @@ import (
 	"osrs-events/internal/discord"
 	"osrs-events/internal/firebase"
 	"osrs-events/internal/osrs"
+	"osrs-events/internal/proofstorage"
 	"osrs-events/internal/scheduler"
 
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -70,8 +71,21 @@ func main() {
 	osrsClient := osrs.NewClient()
 	log.Println("OSRS API client initialized successfully")
 
+	// ─── Proof storage (Cloudflare R2) ─────────────────────────────
+	var proofStore proofstorage.Store
+	if cfg.R2.Enabled() {
+		r2Store, err := proofstorage.NewR2Store(cfg.R2)
+		if err != nil {
+			log.Fatalf("Failed to initialize R2 proof storage: %v", err)
+		}
+		proofStore = r2Store
+		log.Println("R2 proof storage initialized successfully")
+	} else {
+		log.Println("R2 proof storage is not configured; PB approvals will fail until R2 env vars are set")
+	}
+
 	// ─── Discord bot ──────────────────────────────────────────────
-	bot, err := discord.New(cfg.DiscordToken, db, osrsClient, remoteConfigClient)
+	bot, err := discord.New(cfg.DiscordToken, db, osrsClient, remoteConfigClient, proofStore)
 	if err != nil {
 		log.Fatalf("Failed to create Discord bot: %v", err)
 	}

@@ -17,6 +17,7 @@ Nothing sensitive or runtime-specific goes into the image. Everything lives on t
 |------|----------------|---------------------------|
 | **`.env`** | `~/osrs-events/.env` | `env_file: - .env` — Docker injects those variables into the container. The file is never copied into the image. |
 | **`firebase-credentials.json`** | `~/osrs-events/firebase-credentials.json` | Mounted read‑only into the container at `/app/firebase-credentials.json`. Set `GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-credentials.json` in `.env`. |
+| **R2 proof storage** | `~/osrs-events/.env` | Cloudflare R2 credentials and public bucket URL for durable PB proof images (see below). |
 | **DB file** | `~/osrs-events/data/osrs_events.db` | The directory `./data` is mounted at `/app/data`. The app uses `DATABASE_PATH=/app/data/osrs_events.db`. The file is created on first run and persists across container restarts and image updates. |
 
 Result: you keep one copy of `.env` and `firebase-credentials.json` on the NUC; the DB grows in `./data`. No secrets in the image, no manual copy‑paste into the container.
@@ -45,7 +46,20 @@ cd ~/osrs-events
 ```env
 DISCORD_TOKEN=your_discord_bot_token
 GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-credentials.json
+R2_ACCOUNT_ID=your_cloudflare_account_id
+R2_ACCESS_KEY_ID=your_r2_access_key_id
+R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
+R2_BUCKET=pb-challenge
+R2_PUBLIC_BASE_URL=https://pub-xxxxx.r2.dev
 ```
+
+**R2 setup (one-time in Cloudflare):**
+
+1. Create an R2 API token with Object Read & Write on the `pb-challenge` bucket.
+2. Enable public access on the bucket and copy the `r2.dev` base URL for `R2_PUBLIC_BASE_URL`.
+3. Find your account ID in the Cloudflare dashboard (R2 overview) for `R2_ACCOUNT_ID`.
+
+PB approvals persist proof images to R2 at moderation time. If R2 is not configured, the bot starts but PB approvals fail until these variables are set.
 
 **Copy your Firebase key file** into that directory as `firebase-credentials.json`:
 

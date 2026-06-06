@@ -267,6 +267,37 @@ func (s *SQLiteStore) UpsertPBRecordIfBetter(ctx context.Context, record *PBReco
 	return true, nil
 }
 
+func (s *SQLiteStore) GetPBRecordByUserAndCategory(ctx context.Context, guildID, categorySlug, discordUserID string) (*PBRecord, error) {
+	query := `
+		SELECT
+			id, guild_id, category_slug, discord_user_id, display_name,
+			time_text, time_centiseconds, proof_submission_id, proof_url, updated_at, created_at
+		FROM pb_records
+		WHERE guild_id = ? AND category_slug = ? AND discord_user_id = ?`
+
+	var record PBRecord
+	err := s.db.QueryRowContext(ctx, query, guildID, categorySlug, discordUserID).Scan(
+		&record.ID,
+		&record.GuildID,
+		&record.CategorySlug,
+		&record.DiscordUserID,
+		&record.DisplayName,
+		&record.TimeText,
+		&record.TimeCentiseconds,
+		&record.ProofSubmissionID,
+		&record.ProofURL,
+		&record.UpdatedAt,
+		&record.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, ErrPBRecordNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query pb record: %w", err)
+	}
+	return &record, nil
+}
+
 func (s *SQLiteStore) GetPBRecordsByCategory(ctx context.Context, guildID, categorySlug string) ([]*PBRecord, error) {
 	query := `
 		SELECT

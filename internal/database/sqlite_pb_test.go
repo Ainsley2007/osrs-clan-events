@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -58,6 +59,65 @@ func TestPBSubmissionModerationLifecycle(t *testing.T) {
 
 	if err := store.ApprovePBSubmission(ctx, sub.ID, "admin-1", now); err != ErrPBSubmissionNotPending {
 		t.Fatalf("expected ErrPBSubmissionNotPending on second approve, got %v", err)
+	}
+}
+
+func TestGetPBRecordByUserAndCategory(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("NewSQLiteStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	now := time.Now().UTC()
+	if err := store.SaveGuild(ctx, &Guild{GuildID: "g1"}); err != nil {
+		t.Fatalf("SaveGuild: %v", err)
+	}
+
+	sub := &PBSubmission{
+		GuildID:                "g1",
+		CategorySlug:           "inferno",
+		DiscordUserID:          "user-1",
+		DisplayName:            "Alice",
+		LeaderboardDisplayName: "Alice",
+		TimeText:               strPtr("01:00.00"),
+		TimeCentiseconds:       int64Ptr(6000),
+		ProofURL:               "https://example.com/proof.png",
+		Status:                 pbSubmissionStatusPending,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+	if err := store.CreatePBSubmission(ctx, sub); err != nil {
+		t.Fatalf("CreatePBSubmission: %v", err)
+	}
+
+	if _, err := store.GetPBRecordByUserAndCategory(ctx, "g1", "inferno", "user-1"); !errors.Is(err, ErrPBRecordNotFound) {
+		t.Fatalf("expected ErrPBRecordNotFound before insert, got %v", err)
+	}
+
+	inserted, err := store.UpsertPBRecordIfBetter(ctx, &PBRecord{
+		GuildID:           "g1",
+		CategorySlug:      "inferno",
+		DiscordUserID:     "user-1",
+		DisplayName:       "Alice",
+		TimeText:          "01:00.00",
+		TimeCentiseconds:  6000,
+		ProofSubmissionID: sub.ID,
+		ProofURL:          "https://proof.example/1.png",
+		UpdatedAt:         now,
+		CreatedAt:         now,
+	})
+	if err != nil || !inserted {
+		t.Fatalf("UpsertPBRecordIfBetter: inserted=%v err=%v", inserted, err)
+	}
+
+	got, err := store.GetPBRecordByUserAndCategory(ctx, "g1", "inferno", "user-1")
+	if err != nil {
+		t.Fatalf("GetPBRecordByUserAndCategory: %v", err)
+	}
+	if got.ProofURL != "https://proof.example/1.png" {
+		t.Fatalf("unexpected proof url: %q", got.ProofURL)
 	}
 }
 

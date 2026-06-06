@@ -12,9 +12,20 @@ import (
 	"time"
 
 	"osrs-events/internal/database"
+	"osrs-events/internal/proofstorage"
 
 	"github.com/bwmarrin/discordgo"
 )
+
+var ErrSubmissionNotImproving = errors.New("pb submission is not improving")
+
+func IsSubmissionNotImproving(err error) bool {
+	return errors.Is(err, ErrSubmissionNotImproving)
+}
+
+func IsUnavailableSubmissionProof(err error) bool {
+	return errors.Is(err, proofstorage.ErrUnavailableProof)
+}
 
 const (
 	PBApproveEmoji = "✅"
@@ -26,20 +37,22 @@ const (
 var pbTimePattern = regexp.MustCompile(`^(?:(\d+):)?([0-5]?\d):([0-5]\d)\.(\d{2})$`)
 
 type PBService struct {
-	store   PBStore
-	session *discordgo.Session
-	logger  Logger
+	store      PBStore
+	proofStore proofstorage.Store
+	session    *discordgo.Session
+	logger     Logger
 
 	moderationMu                sync.Mutex
 	guildRefreshLocks           map[string]*sync.Mutex
 	leaderboardRefreshDebouncer *guildWorkDebouncer
 }
 
-func NewPBService(store PBStore, session *discordgo.Session, logger Logger) *PBService {
+func NewPBService(store PBStore, proofStore proofstorage.Store, session *discordgo.Session, logger Logger) *PBService {
 	s := &PBService{
-		store:   store,
-		session: session,
-		logger:  logger,
+		store:      store,
+		proofStore: proofStore,
+		session:    session,
+		logger:     logger,
 	}
 	s.leaderboardRefreshDebouncer = newGuildWorkDebouncer(pbLeaderboardRefreshDebounce, func(guildID string) {
 		s.runDebouncedGuildLeaderboardRefresh(guildID)
@@ -172,6 +185,10 @@ func (s *PBService) SubmitPB(ctx context.Context, input *PBSubmissionInput) (*da
 	submission.TimeText = &normalized
 	submission.TimeCentiseconds = &timeCS
 
+	if err := s.validateImprovingSubmission(ctx, input.GuildID, input.CategorySlug, input.DiscordUserID, timeCS, false); err != nil {
+		return nil, nil, err
+	}
+
 	if err := s.store.CreatePBSubmission(ctx, submission); err != nil {
 		return nil, nil, err
 	}
@@ -220,8 +237,27 @@ func (s *PBService) HandleApproval(ctx context.Context, guildID, proofMessageID,
 		return nil, fmt.Errorf("submission has no valid time and cannot be approved")
 	}
 
+	if err := s.validateImprovingSubmission(ctx, submission.GuildID, submission.CategorySlug, submission.DiscordUserID, *submission.TimeCentiseconds, true); err != nil {
+		return nil, err
+	}
+
+	if s.proofStore == nil {
+		return nil, fmt.Errorf("proof storage is not configured")
+	}
+
+	existing, err := s.store.GetPBRecordByUserAndCategory(ctx, submission.GuildID, submission.CategorySlug, submission.DiscordUserID)
+	if err != nil && !errors.Is(err, database.ErrPBRecordNotFound) {
+		return nil, fmt.Errorf("failed to load existing pb record: %w", err)
+	}
+
+	proofURL, err := s.proofStore.PersistFromURL(ctx, submission.ID, submission.ProofURL)
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now().UTC()
 	if err := s.store.ApprovePBSubmission(ctx, submission.ID, reviewerDiscordID, now); err != nil {
+		s.rollbackUploadedProof(ctx, submission.ID)
 		return nil, err
 	}
 
@@ -233,13 +269,24 @@ func (s *PBService) HandleApproval(ctx context.Context, guildID, proofMessageID,
 		TimeText:          *submission.TimeText,
 		TimeCentiseconds:  *submission.TimeCentiseconds,
 		ProofSubmissionID: submission.ID,
-		ProofURL:          submission.ProofURL,
+		ProofURL:          proofURL,
 		UpdatedAt:         now,
 		CreatedAt:         now,
 	}
 	improved, err := s.store.UpsertPBRecordIfBetter(ctx, record)
 	if err != nil {
+		s.rollbackUploadedProof(ctx, submission.ID)
 		return nil, fmt.Errorf("failed to update pb record: %w", err)
+	}
+	if !improved {
+		s.rollbackUploadedProof(ctx, submission.ID)
+		return nil, fmt.Errorf("%w: submission is no longer improving; reject it", ErrSubmissionNotImproving)
+	}
+
+	if existing != nil {
+		if err := s.proofStore.DeleteBySubmissionID(ctx, existing.ProofSubmissionID); err != nil && s.logger != nil {
+			s.logger.Printf("failed to delete superseded pb proof for submission %d: %v", existing.ProofSubmissionID, err)
+		}
 	}
 
 	category, err := s.store.GetPBCategoryBySlug(ctx, submission.CategorySlug)
@@ -247,11 +294,39 @@ func (s *PBService) HandleApproval(ctx context.Context, guildID, proofMessageID,
 		return nil, fmt.Errorf("failed to load pb category: %w", err)
 	}
 
+	submission.ProofURL = proofURL
+
 	return &PBModerationResult{
 		Submission:           submission,
 		Category:             category,
-		ImprovedPersonalBest: improved,
+		ImprovedPersonalBest: true,
 	}, nil
+}
+
+func (s *PBService) validateImprovingSubmission(ctx context.Context, guildID, categorySlug, discordUserID string, timeCS int64, forApproval bool) error {
+	existing, err := s.store.GetPBRecordByUserAndCategory(ctx, guildID, categorySlug, discordUserID)
+	if errors.Is(err, database.ErrPBRecordNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to load current pb record: %w", err)
+	}
+	if timeCS >= existing.TimeCentiseconds {
+		if forApproval {
+			return fmt.Errorf("%w: submission is no longer improving; reject it", ErrSubmissionNotImproving)
+		}
+		return fmt.Errorf("%w: your current PB is %s — this time is not faster", ErrSubmissionNotImproving, existing.TimeText)
+	}
+	return nil
+}
+
+func (s *PBService) rollbackUploadedProof(ctx context.Context, submissionID int64) {
+	if s.proofStore == nil {
+		return
+	}
+	if err := s.proofStore.DeleteBySubmissionID(ctx, submissionID); err != nil && s.logger != nil {
+		s.logger.Printf("failed to roll back uploaded pb proof for submission %d: %v", submissionID, err)
+	}
 }
 
 func (s *PBService) HandleRejection(ctx context.Context, guildID, proofMessageID, reviewerDiscordID string) (*database.PBSubmission, error) {
@@ -702,10 +777,7 @@ func (s *PBService) MarkProofSubmissionAccepted(channelID string, result *PBMode
 		reviewerName = reviewer.Username
 	}
 
-	improvementText := "Accepted (existing PB was already faster)."
-	if result.ImprovedPersonalBest {
-		improvementText = "Accepted and applied as fastest PB."
-	}
+	improvementText := "Accepted and applied as fastest PB."
 
 	embed := &discordgo.MessageEmbed{
 		Title: "PB Submission Reviewed",
