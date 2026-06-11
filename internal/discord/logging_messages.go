@@ -47,69 +47,6 @@ func SendCompetitionStoppedLog(s *discordgo.Session, channelID string, stoppedEv
 	s.ChannelMessageSendEmbed(channelID, embed)
 }
 
-func SendEventCompletedLog(s *discordgo.Session, channelID string, eventType, metricName string, weekNumber int) {
-	if channelID == "" {
-		return
-	}
-
-	var eventDisplayName string
-	if eventType == "botw" {
-		eventDisplayName = "Boss of the Week"
-	} else {
-		eventDisplayName = "Skill of the Week"
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("✅ %s Completed", eventDisplayName),
-		Description: fmt.Sprintf("**%s:** %s\n**Week:** %d\n**Status:** Points calculated, rolling over to next competition",
-			getMetricLabel(eventType), metricName, weekNumber),
-		Color:     0x00AA00,
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-	}
-
-	s.ChannelMessageSendEmbed(channelID, embed)
-}
-
-func SendNewCompetitionStartedLog(s *discordgo.Session, channelID string, eventType, metricName string, weekNumber int) {
-	if channelID == "" {
-		return
-	}
-
-	var eventDisplayName string
-	if eventType == "botw" {
-		eventDisplayName = "Boss of the Week"
-	} else {
-		eventDisplayName = "Skill of the Week"
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("🎯 New %s Started", eventDisplayName),
-		Description: fmt.Sprintf("**%s:** %s\n**Week:** %d\n**Status:** Competition started automatically",
-			getMetricLabel(eventType), metricName, weekNumber),
-		Color:     0x00AA00,
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-	}
-
-	s.ChannelMessageSendEmbed(channelID, embed)
-}
-
-func SendAccountNotFoundLog(s *discordgo.Session, channelID string, rsn string) {
-	if s == nil {
-		return
-	}
-	if channelID == "" {
-		return
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title:       "⚠️ Account Not Found",
-		Description: fmt.Sprintf("Failed to fetch stats for account **%s**.\nThe account may have been renamed or deleted from the OSRS Hiscores.", rsn),
-		Color:       0xFF9900,
-		Timestamp:   time.Now().UTC().Format(time.RFC3339),
-	}
-
-	s.ChannelMessageSendEmbed(channelID, embed)
-}
 
 func SendAccountNotFoundDM(s *discordgo.Session, discordUserID, guildID, rsn string) error {
 	if s == nil {
@@ -139,53 +76,14 @@ func SendAccountNotFoundDM(s *discordgo.Session, discordUserID, guildID, rsn str
 	return err
 }
 
-func SendWeeklyMissingAccountsSummary(s *discordgo.Session, channelID string, notifications int, rsns []string) {
-	if s == nil {
-		return
-	}
-	if channelID == "" || notifications == 0 {
-		return
-	}
-
-	unique := make(map[string]struct{}, len(rsns))
-	for _, rsn := range rsns {
-		unique[rsn] = struct{}{}
-	}
-	uniqueRSNs := make([]string, 0, len(unique))
-	for rsn := range unique {
-		uniqueRSNs = append(uniqueRSNs, rsn)
-	}
-	sort.Strings(uniqueRSNs)
-
-	rsnPreview := strings.Join(uniqueRSNs, ", ")
-	if len(rsnPreview) > 900 {
-		rsnPreview = rsnPreview[:900] + "..."
-	}
-
-	description := fmt.Sprintf(
-		"Unresolved missing accounts this week: **%d**\nUnique RSNs: **%d**\n\n%s",
-		notifications,
-		len(uniqueRSNs),
-		rsnPreview,
-	)
-	embed := &discordgo.MessageEmbed{
-		Title:       "Weekly Missing Accounts Summary",
-		Description: description,
-		Color:       0xFF9900,
-		Timestamp:   time.Now().UTC().Format(time.RFC3339),
-	}
-
-	s.ChannelMessageSendEmbed(channelID, embed)
-}
-
 type RolloverResult struct {
 	EventType  string
 	MetricName string
 	WeekNumber int
 }
 
-func SendRolloverCompleteLog(s *discordgo.Session, channelID string, completedEvents []RolloverResult, newEvents []RolloverResult) {
-	if channelID == "" {
+func SendRolloverCompleteLog(s *discordgo.Session, channelID string, completedEvents []RolloverResult, newEvents []RolloverResult, unresolvedRSNs []string) {
+	if s == nil || channelID == "" {
 		return
 	}
 
@@ -209,6 +107,11 @@ func SendRolloverCompleteLog(s *discordgo.Session, channelID string, completedEv
 
 	description.WriteString("Points have been calculated and awarded. Competitions rolled over automatically.")
 
+	if len(unresolvedRSNs) > 0 {
+		description.WriteString("\n\n")
+		description.WriteString(formatUnresolvedMissingAccounts(unresolvedRSNs))
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title:       "🔄 Weekly Rollover Complete",
 		Description: description.String(),
@@ -219,6 +122,29 @@ func SendRolloverCompleteLog(s *discordgo.Session, channelID string, completedEv
 	s.ChannelMessageSendEmbed(channelID, embed)
 }
 
+func formatUnresolvedMissingAccounts(rsns []string) string {
+	unique := make(map[string]struct{}, len(rsns))
+	for _, rsn := range rsns {
+		unique[rsn] = struct{}{}
+	}
+	uniqueRSNs := make([]string, 0, len(unique))
+	for rsn := range unique {
+		uniqueRSNs = append(uniqueRSNs, rsn)
+	}
+	sort.Strings(uniqueRSNs)
+
+	rsnPreview := strings.Join(uniqueRSNs, ", ")
+	if len(rsnPreview) > 900 {
+		rsnPreview = rsnPreview[:900] + "..."
+	}
+
+	return fmt.Sprintf(
+		"**Unresolved Missing Accounts:** %d\n\n%s",
+		len(uniqueRSNs),
+		rsnPreview,
+	)
+}
+
 func getEventDisplayName(eventType string) string {
 	if eventType == "botw" {
 		return "Boss of the Week"
@@ -226,9 +152,3 @@ func getEventDisplayName(eventType string) string {
 	return "Skill of the Week"
 }
 
-func getMetricLabel(eventType string) string {
-	if eventType == "botw" {
-		return "Boss"
-	}
-	return "Skill"
-}

@@ -66,7 +66,86 @@ func (s *SQLiteStore) GetGuild(ctx context.Context, guildID string) (*Guild, err
 }
 
 func (s *SQLiteStore) DeleteGuild(ctx context.Context, guildID string) error {
-	query := `DELETE FROM guilds WHERE guild_id = ?`
-	_, err := s.db.ExecContext(ctx, query, guildID)
-	return err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := deleteGuildData(ctx, tx, guildID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func deleteGuildData(ctx context.Context, tx *sql.Tx, guildID string) error {
+	queries := []string{
+		`DELETE FROM snapshots WHERE event_id IN (SELECT id FROM events WHERE guild_id = ?)`,
+		`DELETE FROM events WHERE guild_id = ?`,
+		`DELETE FROM missing_account_notifications WHERE guild_id = ?`,
+		`DELETE FROM missing_account_weekly_summaries WHERE guild_id = ?`,
+		`DELETE FROM pb_records WHERE guild_id = ?`,
+		`DELETE FROM pb_submissions WHERE guild_id = ?`,
+		`DELETE FROM pb_group_bundle_messages WHERE guild_id = ?`,
+		`DELETE FROM donations WHERE guild_id = ?`,
+		`DELETE FROM donation_spending WHERE guild_id = ?`,
+		`DELETE FROM participants WHERE guild_id = ?`,
+		`DELETE FROM guilds WHERE guild_id = ?`,
+	}
+	for _, q := range queries {
+		if _, err := tx.ExecContext(ctx, q, guildID); err != nil {
+			return fmt.Errorf("delete guild %s: %w", guildID, err)
+		}
+	}
+	return nil
+}
+
+func (s *SQLiteStore) ListGuildIDs(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT guild_id FROM guilds`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (s *SQLiteStore) PurgeOrphanedEvents(ctx context.Context) (int, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT e.guild_id FROM events e
+		LEFT JOIN guilds g ON e.guild_id = g.guild_id
+		WHERE g.guild_id IS NULL`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var guildIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		guildIDs = append(guildIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	purged := 0
+	for _, guildID := range guildIDs {
+		if err := s.DeleteGuild(ctx, guildID); err != nil {
+			return purged, err
+		}
+		purged++
+	}
+	return purged, nil
 }

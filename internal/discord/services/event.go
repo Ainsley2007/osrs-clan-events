@@ -244,9 +244,17 @@ func (s *EventService) StartNewEvent(ctx context.Context, guildID string, eventT
 	return s.StartSotw(ctx, guildID, startTime)
 }
 
-// StartNewEventFromRollover creates a new event and seeds initial snapshots from pre-fetched stats.
-// Used by the scheduler so one API fetch per account serves both final snapshots and initial snapshots.
-func (s *EventService) StartNewEventFromRollover(ctx context.Context, guildID string, eventType string, startTime time.Time, statsByAccountID map[int64]*osrs.PlayerStats) (*StartEventResult, error) {
+// PreparedRolloverEvent holds a validated but not-yet-persisted next-week event.
+// Produced by PrepareRolloverEvent and consumed by CommitRolloverEvent.
+type PreparedRolloverEvent struct {
+	Event      *database.Event
+	MetricName string
+}
+
+// PrepareRolloverEvent selects the next metric and builds the new event without persisting anything.
+// It may be called while the old event is still active in the DB (rollover knows it is replacing it).
+// Any config-fetch or metric-selection failure is surfaced here before any mutations occur.
+func (s *EventService) PrepareRolloverEvent(ctx context.Context, guildID, eventType string, startTime time.Time) (*PreparedRolloverEvent, error) {
 	var event *database.Event
 	var metricName string
 	var err error
@@ -258,17 +266,19 @@ func (s *EventService) StartNewEventFromRollover(ctx context.Context, guildID st
 	if err != nil {
 		return nil, err
 	}
-	if err := s.CreateEvent(ctx, event); err != nil {
-		return nil, fmt.Errorf("failed to create event: %w", err)
+	return &PreparedRolloverEvent{Event: event, MetricName: metricName}, nil
+}
+
+// CommitRolloverEvent persists a PreparedRolloverEvent and seeds its initial snapshots from
+// pre-fetched stats so no extra hiscores API calls are needed.
+func (s *EventService) CommitRolloverEvent(ctx context.Context, prepared *PreparedRolloverEvent, statsByAccountID map[int64]*osrs.PlayerStats) error {
+	if err := s.CreateEvent(ctx, prepared.Event); err != nil {
+		return fmt.Errorf("failed to create event: %w", err)
 	}
-	if err := s.snapshotService.CreateInitialSnapshotsForEventsFromStats(ctx, []*database.Event{event}, statsByAccountID); err != nil {
-		return nil, fmt.Errorf("failed to create initial snapshots from cache: %w", err)
+	if err := s.snapshotService.CreateInitialSnapshotsForEventsFromStats(ctx, []*database.Event{prepared.Event}, statsByAccountID); err != nil {
+		return fmt.Errorf("failed to create initial snapshots from cache: %w", err)
 	}
-	return &StartEventResult{
-		Event:          event,
-		MetricName:     metricName,
-		SnapshotResult: nil,
-	}, nil
+	return nil
 }
 
 func lastMetricNames(events []*database.Event, n int) []string {

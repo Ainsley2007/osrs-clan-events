@@ -518,6 +518,20 @@ func (s *SnapshotService) UpdateSnapshotsForEventsWithResult(ctx context.Context
 	}, nil
 }
 
+// ValidateRolloverCommitReadiness checks that snapshot and account data needed for Rollover Commit
+// is readable before any competition state changes.
+func (s *SnapshotService) ValidateRolloverCommitReadiness(ctx context.Context, expiringEvents []*database.Event, guildID string) error {
+	for _, event := range expiringEvents {
+		if _, err := s.store.GetSnapshotsWithAccounts(ctx, event.ID); err != nil {
+			return fmt.Errorf("event %d (%s): %w", event.ID, event.Type, err)
+		}
+	}
+	if _, err := s.store.GetAccountsByGuild(ctx, guildID); err != nil {
+		return fmt.Errorf("guild %s accounts: %w", guildID, err)
+	}
+	return nil
+}
+
 // CreateInitialSnapshotsForEventsFromStats creates initial snapshot rows for the given events using
 // pre-fetched stats (e.g. from UpdateSnapshotsForEventsWithResult). No API calls are made.
 // Used at rollover so the same fetch that updated final snapshots also seeds the new events.

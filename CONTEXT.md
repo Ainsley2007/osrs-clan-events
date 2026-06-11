@@ -152,6 +152,26 @@ _Avoid_: Ban list, guaranteed rotation, PB tie logic
 The end-of-week transition that completes the current Weekly Competition, awards points, and starts the next week with a newly selected Competition Metric.
 _Avoid_: Global Rebuild, guild initialization
 
+**Rollover Preparation**:
+Validating that Rollover can complete and selecting the next Competition Metrics before any competition state changes.
+_Avoid_: Phase A, mid-rollover metric selection
+
+**Rollover Commit**:
+Persisting completed Weekly Competitions and starting the next Synchronized Competition Period using data already fetched.
+_Avoid_: Phase B, per-type commit
+
+**Synchronized Competition Period**:
+The shared start and end instant for a guild's active BOTW and SOTW in the same week; both competitions are expected to begin and end together. A guild's Rollover completes both Weekly Competitions in the same tick or leaves both unchanged for retry.
+_Avoid_: Staggered rollover, per-type schedule, partial rollover
+
+**Rollover Log**:
+The single guild log-channel message that reports completed and newly started BOTW and SOTW together after Rollover, and when any remain unresolved lists Missing Account Notifications for admin visibility.
+_Avoid_: Per-competition completion message, separate weekly missing-accounts message, per-account log embed
+
+**Missing Account Notification**:
+A persisted record that a participant's RSN could not be found on Hiscores; the affected player is notified by DM to use `/rename`.
+_Avoid_: Account Not Found log embed, per-account log warning, hourly log spam
+
 ## Example Dialogue
 
 Dev: "A user posted a run in `pb-proofs`; is that already their PB?"  

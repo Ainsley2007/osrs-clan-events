@@ -3,6 +3,10 @@ package osrs
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -130,5 +134,113 @@ func TestRateLimiter(t *testing.T) {
 		t.Logf("Warning: Rate limiting may not be working as expected. 3 requests took %v", elapsed)
 	} else {
 		t.Logf("Rate limiter working: 3 requests took %v", elapsed)
+	}
+}
+
+const fakeStatsJSON = `{"name":"TestPlayer","skills":[{"id":0,"name":"Overall","rank":1,"level":2277,"xp":200000000}],"activities":[]}`
+
+func newTestClient(server *httptest.Server) *Client {
+	return &Client{
+		httpClient:   server.Client(),
+		rateLimiter:  NewRateLimiter(),
+		baseURL:      server.URL,
+		retryBackoff: 1 * time.Millisecond,
+	}
+}
+
+func TestGetPlayerStats_429RetrySuccess(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, fakeStatsJSON)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	stats, err := client.GetPlayerStats(context.Background(), "TestPlayer")
+	if err != nil {
+		t.Fatalf("expected success after retry, got: %v", err)
+	}
+	if stats == nil || stats.Name != "TestPlayer" {
+		t.Fatalf("unexpected stats: %+v", stats)
+	}
+	if calls.Load() != 2 {
+		t.Errorf("expected 2 HTTP calls (1 429 + 1 200), got %d", calls.Load())
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	tests := []struct {
+		header string
+		want   time.Duration
+	}{
+		{"5", 5 * time.Second},
+		{"0", 0},
+		{"-1", 0},
+		{"abc", 0},
+		{"", 0},
+	}
+	for _, tc := range tests {
+		resp := &http.Response{Header: make(http.Header)}
+		if tc.header != "" {
+			resp.Header.Set("Retry-After", tc.header)
+		}
+		got := parseRetryAfter(resp)
+		if got != tc.want {
+			t.Errorf("parseRetryAfter(%q) = %v, want %v", tc.header, got, tc.want)
+		}
+	}
+}
+
+func TestGetPlayerStats_429WithRetryAfterHonored(t *testing.T) {
+	// Server returns 429 with Retry-After: 0 (no extra wait) then 200.
+	// Verifies that a Retry-After header is read without causing failures.
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		if n == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, fakeStatsJSON)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	stats, err := client.GetPlayerStats(context.Background(), "TestPlayer")
+	if err != nil {
+		t.Fatalf("expected success after Retry-After retry, got: %v", err)
+	}
+	if stats == nil || stats.Name != "TestPlayer" {
+		t.Fatalf("unexpected stats: %+v", stats)
+	}
+}
+
+func TestGetPlayerStats_429Exhaustion_ReturnsRateLimitError(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	_, err := client.GetPlayerStats(context.Background(), "TestPlayer")
+	if err == nil {
+		t.Fatal("expected error after exhausting retries")
+	}
+	var rlErr *RateLimitError
+	if !errors.As(err, &rlErr) {
+		t.Errorf("expected *RateLimitError, got %T: %v", err, err)
+	}
+	// 1 initial attempt + maxRetries retries
+	if got := calls.Load(); got != maxRetries+1 {
+		t.Errorf("expected %d HTTP calls, got %d", maxRetries+1, got)
 	}
 }

@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -16,6 +17,7 @@ type Scheduler struct {
 	initializerService InitializerService
 	session            *discordgo.Session
 	clock              Clock
+	missingAccountMu   sync.Mutex
 	stopCompletion     chan struct{}
 	stopHourly         chan struct{}
 }

@@ -21,15 +21,14 @@ type Store interface {
 	MarkMissingAccountNotificationDMSent(ctx context.Context, notificationID int64, sentAt time.Time) error
 	ResolveMissingAccountNotification(ctx context.Context, accountID int64, guildID string, resolvedAt time.Time) error
 	GetUnresolvedMissingAccountNotificationsByGuild(ctx context.Context, guildID string) ([]*database.MissingAccountNotification, error)
-	ShouldSendMissingAccountWeeklySummary(ctx context.Context, guildID, weekKey string) (bool, error)
-	MarkMissingAccountWeeklySummarySent(ctx context.Context, guildID, weekKey string, sentAt time.Time) error
 }
 
 type EventService interface {
 	CompleteEvent(ctx context.Context, event *database.Event) error
 	CompleteEventWithoutSnapshotUpdate(ctx context.Context, event *database.Event) error
 	StartNewEvent(ctx context.Context, guildID string, eventType string, startTime time.Time) (*services.StartEventResult, error)
-	StartNewEventFromRollover(ctx context.Context, guildID string, eventType string, startTime time.Time, statsByAccountID map[int64]*osrs.PlayerStats) (*services.StartEventResult, error)
+	PrepareRolloverEvent(ctx context.Context, guildID, eventType string, startTime time.Time) (*services.PreparedRolloverEvent, error)
+	CommitRolloverEvent(ctx context.Context, prepared *services.PreparedRolloverEvent, statsByAccountID map[int64]*osrs.PlayerStats) error
 }
 
 type SnapshotService interface {
@@ -38,6 +37,7 @@ type SnapshotService interface {
 	UpdateSnapshotsForEventsWithResult(ctx context.Context, events []*database.Event) (*services.UpdateSnapshotsForEventsResult, error)
 	CreateInitialSnapshots(ctx context.Context, eventID int64, guildID, metricName, metricType string) (int, error)
 	CalculateAndAwardPoints(ctx context.Context, event *database.Event) error
+	ValidateRolloverCommitReadiness(ctx context.Context, expiringEvents []*database.Event, guildID string) error
 }
 
 type LeaderboardService interface {

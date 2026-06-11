@@ -13,9 +13,10 @@ import (
 )
 
 type Client struct {
-	httpClient  *http.Client
-	rateLimiter *RateLimiter
-	baseURL     string
+	httpClient    *http.Client
+	rateLimiter   *RateLimiter
+	baseURL       string
+	retryBackoff  time.Duration
 }
 
 func NewClient() *Client {
@@ -23,14 +24,16 @@ func NewClient() *Client {
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		rateLimiter: NewRateLimiter(),
-		baseURL:     "https://secure.runescape.com/m=hiscore_oldschool",
+		rateLimiter:  NewRateLimiter(),
+		baseURL:      "https://secure.runescape.com/m=hiscore_oldschool",
+		retryBackoff: retryBackoffBase,
 	}
 }
 
 const (
-	maxRetries = 3
-	retryDelay = 2 * time.Second
+	maxRetries      = 3
+	retryBackoffBase = 2 * time.Second
+	maxBackoff       = 30 * time.Second
 )
 
 // retryableStatus returns true for transient server/gateway errors (502, 503, 504).
@@ -46,6 +49,43 @@ func sleepOrDone(ctx context.Context, d time.Duration) {
 	case <-t.C:
 	case <-ctx.Done():
 	}
+}
+
+// parseRetryAfter reads the Retry-After header and returns the indicated wait duration.
+// Returns 0 when the header is absent or unparseable.
+func parseRetryAfter(resp *http.Response) time.Duration {
+	val := resp.Header.Get("Retry-After")
+	if val == "" {
+		return 0
+	}
+	// Integer seconds
+	var secs int64
+	if _, err := fmt.Sscanf(val, "%d", &secs); err == nil && secs > 0 {
+		return time.Duration(secs) * time.Second
+	}
+	// HTTP-date
+	if t, err := http.ParseTime(val); err == nil {
+		d := time.Until(t)
+		if d > 0 {
+			return d
+		}
+	}
+	return 0
+}
+
+// backoffFor returns the delay to wait before attempt number `attempt` (0-indexed).
+// It takes the larger of the server-suggested retryAfter and an exponential base delay,
+// capped at maxBackoff.
+func (c *Client) backoffFor(attempt int, retryAfter time.Duration) time.Duration {
+	exp := c.retryBackoff * (1 << uint(attempt))
+	d := exp
+	if retryAfter > d {
+		d = retryAfter
+	}
+	if d > maxBackoff {
+		d = maxBackoff
+	}
+	return d
 }
 
 // sanitizeErrorMessage cleans up error messages, especially HTML error pages.
@@ -101,7 +141,7 @@ func (c *Client) GetPlayerStats(ctx context.Context, rsn string) (*PlayerStats, 
 		if err != nil {
 			lastErr = fmt.Errorf("failed to execute request: %w", err)
 			if attempt < maxRetries {
-				sleepOrDone(ctx, retryDelay)
+				sleepOrDone(ctx, c.backoffFor(attempt, 0))
 			}
 			continue
 		}
@@ -133,10 +173,14 @@ func (c *Client) GetPlayerStats(ctx context.Context, rsn string) (*PlayerStats, 
 			return nil, &PlayerNotFoundError{RSN: rsn}
 
 		case http.StatusTooManyRequests:
+			retryAfter := parseRetryAfter(resp)
 			resp.Body.Close()
-			return nil, &RateLimitError{
-				Message: "too many requests to OSRS API",
+			lastErr = &RateLimitError{Message: "too many requests to OSRS API"}
+			if attempt < maxRetries {
+				sleepOrDone(ctx, c.backoffFor(attempt, retryAfter))
+				continue
 			}
+			return nil, lastErr
 
 		default:
 			body, _ := io.ReadAll(resp.Body)
@@ -147,7 +191,7 @@ func (c *Client) GetPlayerStats(ctx context.Context, rsn string) (*PlayerStats, 
 				Message:    sanitizedMsg,
 			}
 			if retryableStatus(resp.StatusCode) && attempt < maxRetries {
-				sleepOrDone(ctx, retryDelay)
+				sleepOrDone(ctx, c.backoffFor(attempt, 0))
 				continue
 			}
 			return nil, lastErr

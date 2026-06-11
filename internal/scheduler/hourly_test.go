@@ -12,17 +12,15 @@ import (
 )
 
 type mockHourlyStore struct {
-	notifications        map[string]*database.MissingAccountNotification
-	nextID               int64
-	markDMSentCount      int
-	weeklySummaryByGuild map[string]string
+	notifications   map[string]*database.MissingAccountNotification
+	nextID          int64
+	markDMSentCount int
 }
 
 func newMockHourlyStore() *mockHourlyStore {
 	return &mockHourlyStore{
-		notifications:        make(map[string]*database.MissingAccountNotification),
-		nextID:               1,
-		weeklySummaryByGuild: make(map[string]string),
+		notifications: make(map[string]*database.MissingAccountNotification),
+		nextID:          1,
 	}
 }
 
@@ -104,15 +102,6 @@ func (m *mockHourlyStore) GetUnresolvedMissingAccountNotificationsByGuild(_ cont
 	return unresolved, nil
 }
 
-func (m *mockHourlyStore) ShouldSendMissingAccountWeeklySummary(_ context.Context, guildID, weekKey string) (bool, error) {
-	return m.weeklySummaryByGuild[guildID] != weekKey, nil
-}
-
-func (m *mockHourlyStore) MarkMissingAccountWeeklySummarySent(_ context.Context, guildID, weekKey string, _ time.Time) error {
-	m.weeklySummaryByGuild[guildID] = weekKey
-	return nil
-}
-
 func TestProcessMissingAccountNotifications_SendsDMOnlyOncePerUnresolvedState(t *testing.T) {
 	store := newMockHourlyStore()
 	s := &Scheduler{store: store}
@@ -166,34 +155,5 @@ func TestProcessMissingAccountNotifications_ResolvesAfterSuccessfulFetch(t *test
 	}
 	if len(unresolved) != 0 {
 		t.Fatalf("expected no unresolved notifications, got %d", len(unresolved))
-	}
-}
-
-func TestSendWeeklyMissingAccountSummaries_SendsOncePerWeek(t *testing.T) {
-	store := newMockHourlyStore()
-	now := time.Date(2026, time.February, 24, 12, 0, 0, 0, time.UTC)
-	store.UpsertMissingAccountNotificationFailure(context.Background(), &database.MissingAccountNotification{
-		AccountID:     3,
-		DiscordUserID: "u3",
-		GuildID:       "g1",
-		RSN:           "StillMissing",
-		FirstFailedAt: now,
-		LastFailedAt:  now,
-	})
-
-	s := &Scheduler{store: store}
-	guilds := map[string]*database.Guild{
-		"g1": {GuildID: "g1", LogChannelID: "log-1"},
-	}
-
-	s.sendWeeklyMissingAccountSummaries(context.Background(), now, guilds)
-	firstWeek := store.weeklySummaryByGuild["g1"]
-	if firstWeek == "" {
-		t.Fatalf("expected weekly summary to be marked as sent")
-	}
-
-	s.sendWeeklyMissingAccountSummaries(context.Background(), now.Add(24*time.Hour), guilds)
-	if store.weeklySummaryByGuild["g1"] != firstWeek {
-		t.Fatalf("expected same week key after second call in same week")
 	}
 }

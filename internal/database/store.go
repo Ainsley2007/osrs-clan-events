@@ -170,6 +170,8 @@ type Store interface {
 	SaveGuild(ctx context.Context, guild *Guild) error
 	GetGuild(ctx context.Context, guildID string) (*Guild, error)
 	DeleteGuild(ctx context.Context, guildID string) error
+	ListGuildIDs(ctx context.Context) ([]string, error)
+	PurgeOrphanedEvents(ctx context.Context) (int, error)
 
 	SaveParticipant(ctx context.Context, p *Participant) error
 	GetParticipant(ctx context.Context, discordUserID, guildID string) (*Participant, error)

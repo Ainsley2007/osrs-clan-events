@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"osrs-events/internal/database"
@@ -144,18 +145,9 @@ func (s *Scheduler) cleanupStaleActiveEvents(ctx context.Context) {
 }
 
 func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Group events by guild to send consolidated log messages
-	guildRollovers := make(map[string]struct {
-		guild           *database.Guild
-		completedEvents []discord.RolloverResult
-		newEvents       []discord.RolloverResult
-	})
-
-	// Take final snapshot for all events that have ended (fetch stats once per account).
-	// Reuse FetchedStats as initial snapshots for new events so we only hit the API once per account.
 	var snapshotResult *services.UpdateSnapshotsForEventsResult
 	if len(events) > 0 {
 		var err error
@@ -171,153 +163,217 @@ func (s *Scheduler) processEventCompletionsForEvents(events []*database.Event) {
 		fetchedStats = snapshotResult.FetchedStats
 	}
 
-	// If any snapshot failures, decide whether to skip rollover (retry later) or proceed.
-	if snapshotResult != nil && len(snapshotResult.FailedUpdates) > 0 {
-		hasTransient := false
-		for _, failed := range snapshotResult.FailedUpdates {
-			var rateLimitErr *osrs.RateLimitError
-			var apiErr *osrs.APIError
-			var notFoundErr *osrs.PlayerNotFoundError
-			if errors.As(failed.Error, &rateLimitErr) {
-				hasTransient = true
-				break
-			}
-			if errors.As(failed.Error, &apiErr) && apiErr.StatusCode >= 500 {
-				hasTransient = true
-				break
-			}
-			if !errors.As(failed.Error, &notFoundErr) {
-				hasTransient = true
-				break
-			}
-		}
-		if hasTransient {
-			log.Printf("Transient snapshot failures (429/5xx or other non-404) - skipping rollover, will retry next tick")
-			return
-		}
-		// All failures are 404. If all accounts in the batch failed, treat as service down.
-		uniqueFailed := make(map[string]struct{})
-		for _, f := range snapshotResult.FailedUpdates {
-			uniqueFailed[f.RSN] = struct{}{}
-		}
-		if snapshotResult.TotalAccounts > 0 && len(uniqueFailed) >= snapshotResult.TotalAccounts {
-			log.Printf("404 for all accounts in batch (service may be down) - skipping rollover, will retry next tick")
-			return
-		}
-		// Proceed with rollover; log each 404 to guild (name changes).
-		for _, failed := range snapshotResult.FailedUpdates {
-			var notFoundErr *osrs.PlayerNotFoundError
-			if !errors.As(failed.Error, &notFoundErr) {
-				continue
-			}
-			guild, err := s.store.GetGuild(ctx, failed.GuildID)
-			if err != nil || guild == nil || guild.LogChannelID == "" {
-				continue
-			}
-			discord.SendAccountNotFoundLog(s.session, guild.LogChannelID, failed.RSN)
-		}
+	if snapshotResult != nil {
+		s.processMissingAccountNotifications(ctx, time.Now().UTC(), snapshotResult)
 	}
 
-	for _, event := range events {
-		log.Printf("Processing event completion: %s (ID: %d, Guild: %s)", event.Type, event.ID, event.GuildID)
+	decisions := classifyFailuresByGuild(snapshotResult)
 
-		guild, err := s.store.GetGuild(ctx, event.GuildID)
-		if err == nil {
-			// Update weekly leaderboard BEFORE completing event (while it's still active)
-			if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, event.GuildID, event.Type); err != nil {
-				log.Printf("Failed to update weekly leaderboard before completion: %v", err)
-			}
-		}
-
-		// STEP 1: Fully complete the old event (points + overall leaderboard + deactivate)
-		// This ensures all points are calculated BEFORE the new event is created
-		if err := s.snapshotService.CalculateAndAwardPoints(ctx, event); err != nil {
-			log.Printf("CRITICAL: Failed to calculate points for event %d: %v - skipping rollover", event.ID, err)
-			continue // Don't create new event if we can't complete old one
-		}
-
-		// Update overall leaderboard with completed event points
-		if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, event.GuildID, event.Type); err != nil {
-			log.Printf("Failed to update overall leaderboard for completed event: %v", err)
-			// Continue anyway - points are calculated
-		}
-
-		// Deactivate the old event
-		if err := s.store.DeactivateEvent(ctx, event.ID); err != nil {
-			log.Printf("CRITICAL: Failed to deactivate event %d: %v - skipping rollover", event.ID, err)
-			continue // Don't create new event if we can't deactivate old one
-		}
-
-		log.Printf("✅ Event %d fully completed (points awarded, leaderboard updated, deactivated)", event.ID)
-
-		// STEP 2: Create the new event and seed initial snapshots from the same fetch (no extra API calls)
-		rolloverResult, err := s.eventService.StartNewEventFromRollover(ctx, event.GuildID, event.Type, event.EndTime, fetchedStats)
-		if err != nil {
-			log.Printf("CRITICAL: Failed to start new %s event for Guild %s: %v - will retry on next check", event.Type, event.GuildID, err)
+	for guildID, guildEvents := range groupEventsByGuild(events) {
+		switch decisions[guildID] {
+		case guildSkipTransient:
+			log.Printf("[Guild %s] Deferring rollover: transient snapshot failures (429/5xx)", guildID)
+			continue
+		case guildSkipAll404:
+			log.Printf("[Guild %s] Deferring rollover: too few successful hiscores fetches (likely API issue)", guildID)
 			continue
 		}
-
-		// Track completed event for consolidated log
-		if guild != nil {
-			rollover, exists := guildRollovers[event.GuildID]
-			if !exists {
-				rollover = struct {
-					guild           *database.Guild
-					completedEvents []discord.RolloverResult
-					newEvents       []discord.RolloverResult
-				}{
-					guild:           guild,
-					completedEvents: []discord.RolloverResult{},
-					newEvents:       []discord.RolloverResult{},
-				}
-			}
-			rollover.completedEvents = append(rollover.completedEvents, discord.RolloverResult{
-				EventType:  event.Type,
-				MetricName: event.MetricJsonID,
-				WeekNumber: event.WeekNumber,
-			})
-			guildRollovers[event.GuildID] = rollover
-
-			// Update overall leaderboard after completion
-			if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, event.GuildID, event.Type); err != nil {
-				log.Printf("Failed to update overall leaderboard for %s: %v", event.Type, err)
-			}
-		}
-
-		// Rename category with new event name
-		if guild != nil {
-			if err := s.initializerService.RenameCategoryForEvent(ctx, guild, event.Type, rolloverResult.Event); err != nil {
-				log.Printf("Failed to rename category for %s: %v", event.Type, err)
-			}
-		}
-
-		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, event.GuildID, event.Type); err != nil {
-			log.Printf("Failed to update weekly leaderboard after rollover: %v", err)
-		}
-
-		// Update overall leaderboard for new event
-		if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, event.GuildID, event.Type); err != nil {
-			log.Printf("Failed to update overall leaderboard after rollover: %v", err)
-		}
-
-		// Track new event for consolidated log
-		if guild != nil {
-			rollover := guildRollovers[event.GuildID]
-			rollover.newEvents = append(rollover.newEvents, discord.RolloverResult{
-				EventType:  event.Type,
-				MetricName: rolloverResult.MetricName,
-				WeekNumber: rolloverResult.Event.WeekNumber,
-			})
-			guildRollovers[event.GuildID] = rollover
-		}
-
-		log.Printf("Event %d completed and rolled over successfully", event.ID)
-	}
-
-	// Send consolidated log messages per guild
-	for _, rollover := range guildRollovers {
-		if rollover.guild != nil && rollover.guild.LogChannelID != "" && (len(rollover.completedEvents) > 0 || len(rollover.newEvents) > 0) {
-			discord.SendRolloverCompleteLog(s.session, rollover.guild.LogChannelID, rollover.completedEvents, rollover.newEvents)
-		}
+		sort.Slice(guildEvents, func(i, j int) bool {
+			return guildEvents[i].Type < guildEvents[j].Type
+		})
+		s.rolloverGuild(ctx, guildID, guildEvents, fetchedStats)
 	}
 }
+
+func (s *Scheduler) rolloverGuild(ctx context.Context, guildID string, events []*database.Event, fetchedStats map[int64]*osrs.PlayerStats) {
+	eventTypes := make([]string, len(events))
+	for i, e := range events {
+		eventTypes[i] = e.Type
+	}
+	log.Printf("[Guild %s] Starting rollover (%d events: %s)", guildID, len(events), strings.Join(eventTypes, ", "))
+
+	guild, err := s.store.GetGuild(ctx, guildID)
+	if err != nil {
+		log.Printf("[Guild %s] Failed to load guild for rollover: %v", guildID, err)
+	}
+
+	prepared := make([]*services.PreparedRolloverEvent, len(events))
+	for i, event := range events {
+		p, err := s.eventService.PrepareRolloverEvent(ctx, event.GuildID, event.Type, event.EndTime)
+		if err != nil {
+			log.Printf("[Guild %s] CRITICAL: rollover preparation failed for %s: %v — deferring entire guild", guildID, event.Type, err)
+			return
+		}
+		prepared[i] = p
+	}
+
+	if err := s.snapshotService.ValidateRolloverCommitReadiness(ctx, events, guildID); err != nil {
+		log.Printf("[Guild %s] CRITICAL: rollover commit readiness check failed: %v — deferring entire guild", guildID, err)
+		return
+	}
+
+	var completedEvents, newEvents []discord.RolloverResult
+	for i, event := range events {
+		if err := s.snapshotService.CalculateAndAwardPoints(ctx, event); err != nil {
+			log.Printf("[Guild %s] CRITICAL: failed to award points for event %d (%s): %v — aborting rollover", guildID, event.ID, event.Type, err)
+			return
+		}
+
+		if err := s.store.DeactivateEvent(ctx, event.ID); err != nil {
+			log.Printf("[Guild %s] CRITICAL: failed to deactivate event %d (%s): %v — aborting rollover", guildID, event.ID, event.Type, err)
+			return
+		}
+
+		if err := s.eventService.CommitRolloverEvent(ctx, prepared[i], fetchedStats); err != nil {
+			log.Printf("[Guild %s] CRITICAL: failed to commit new %s event: %v — aborting rollover", guildID, event.Type, err)
+			return
+		}
+
+		completedEvents = append(completedEvents, discord.RolloverResult{
+			EventType:  event.Type,
+			MetricName: event.MetricJsonID,
+			WeekNumber: event.WeekNumber,
+		})
+		newEvents = append(newEvents, discord.RolloverResult{
+			EventType:  event.Type,
+			MetricName: prepared[i].MetricName,
+			WeekNumber: prepared[i].Event.WeekNumber,
+		})
+
+		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, event.GuildID, event.Type); err != nil {
+			log.Printf("[Guild %s] Failed to update weekly leaderboard for %s: %v", guildID, event.Type, err)
+		}
+		if err := s.leaderboardService.UpdateOverallLeaderboard(ctx, event.GuildID, event.Type); err != nil {
+			log.Printf("[Guild %s] Failed to update overall leaderboard for %s: %v", guildID, event.Type, err)
+		}
+		if guild != nil {
+			if err := s.initializerService.RenameCategoryForEvent(ctx, guild, event.Type, prepared[i].Event); err != nil {
+				log.Printf("[Guild %s] Failed to rename category for %s: %v", guildID, event.Type, err)
+			}
+		}
+	}
+
+	if len(completedEvents) != len(events) {
+		log.Printf("[Guild %s] CRITICAL: rollover finished with %d/%d events committed — skipping Rollover Log", guildID, len(completedEvents), len(events))
+		return
+	}
+
+	log.Printf("[Guild %s] Rollover commit complete (%d events)", guildID, len(completedEvents))
+
+	if guild == nil || guild.LogChannelID == "" {
+		log.Printf("[Guild %s] Rollover complete but no log channel configured — skipping Rollover Log", guildID)
+		return
+	}
+
+	unresolvedRSNs := s.unresolvedMissingAccountRSNs(ctx, guildID)
+	discord.SendRolloverCompleteLog(s.session, guild.LogChannelID, completedEvents, newEvents, unresolvedRSNs)
+	if len(unresolvedRSNs) > 0 {
+		log.Printf("[Guild %s] Rollover Log sent (%d unresolved missing account(s))", guildID, len(unresolvedRSNs))
+	} else {
+		log.Printf("[Guild %s] Rollover Log sent", guildID)
+	}
+}
+
+func (s *Scheduler) unresolvedMissingAccountRSNs(ctx context.Context, guildID string) []string {
+	unresolved, err := s.store.GetUnresolvedMissingAccountNotificationsByGuild(ctx, guildID)
+	if err != nil {
+		log.Printf("Failed to load unresolved missing account notifications for guild %s: %v", guildID, err)
+		return nil
+	}
+	rsns := make([]string, 0, len(unresolved))
+	for _, notification := range unresolved {
+		rsns = append(rsns, notification.RSN)
+	}
+	return rsns
+}
+
+type guildRolloverDecision int
+
+const (
+	guildProceed      guildRolloverDecision = iota
+	guildSkipTransient
+	guildSkipAll404
+)
+
+// minSuccessFraction is the minimum share of accounts that must fetch successfully
+// before rollover proceeds when some accounts returned 404. Below this threshold,
+// a handful of successes amid mass 404s is treated as a flaky API, not real renames.
+const minSuccessFraction = 0.5
+
+// classifyFailuresByGuild assigns a rollover decision to each guild based on its snapshot failures.
+// Guilds with transient errors (429/5xx/other non-404) are deferred for the entire tick.
+// Guilds where too few accounts fetched successfully (including all-404) are deferred.
+// Guilds with no failures, or 404s among a majority of successes, proceed to rollover.
+func classifyFailuresByGuild(result *services.UpdateSnapshotsForEventsResult) map[string]guildRolloverDecision {
+	decisions := make(map[string]guildRolloverDecision)
+	if result == nil || len(result.FailedUpdates) == 0 {
+		return decisions
+	}
+
+	successCount := countUniqueAccountsByGuild(result.SuccessfulPairs)
+	notFoundCount := make(map[string]int)
+	seenNotFound := make(map[string]map[int64]struct{})
+
+	for _, failed := range result.FailedUpdates {
+		if decisions[failed.GuildID] == guildSkipTransient {
+			continue
+		}
+		var notFoundErr *osrs.PlayerNotFoundError
+		if !errors.As(failed.Error, &notFoundErr) {
+			decisions[failed.GuildID] = guildSkipTransient
+			continue
+		}
+		if failed.AccountID == 0 {
+			continue
+		}
+		if seenNotFound[failed.GuildID] == nil {
+			seenNotFound[failed.GuildID] = make(map[int64]struct{})
+		}
+		if _, ok := seenNotFound[failed.GuildID][failed.AccountID]; ok {
+			continue
+		}
+		seenNotFound[failed.GuildID][failed.AccountID] = struct{}{}
+		notFoundCount[failed.GuildID]++
+	}
+
+	for guildID, nf := range notFoundCount {
+		if decisions[guildID] == guildSkipTransient {
+			continue
+		}
+		sc := successCount[guildID]
+		total := sc + nf
+		if total == 0 || float64(sc)/float64(total) <= minSuccessFraction {
+			decisions[guildID] = guildSkipAll404
+		}
+	}
+
+	return decisions
+}
+
+func countUniqueAccountsByGuild(pairs []services.SuccessfulAccountUpdate) map[string]int {
+	counts := make(map[string]int)
+	seen := make(map[string]map[int64]struct{})
+	for _, p := range pairs {
+		if p.AccountID == 0 {
+			continue
+		}
+		if seen[p.GuildID] == nil {
+			seen[p.GuildID] = make(map[int64]struct{})
+		}
+		if _, ok := seen[p.GuildID][p.AccountID]; ok {
+			continue
+		}
+		seen[p.GuildID][p.AccountID] = struct{}{}
+		counts[p.GuildID]++
+	}
+	return counts
+}
+
+func groupEventsByGuild(events []*database.Event) map[string][]*database.Event {
+	byGuild := make(map[string][]*database.Event, len(events))
+	for _, event := range events {
+		byGuild[event.GuildID] = append(byGuild[event.GuildID], event)
+	}
+	return byGuild
+}
+

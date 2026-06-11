@@ -14,7 +14,8 @@ type SQLiteStore struct {
 }
 
 func NewSQLiteStore(path string) (*SQLiteStore, error) {
-	db, err := sql.Open("sqlite", path)
+	dsn := sqliteDSN(path)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -33,6 +34,20 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	}
 
 	return store, nil
+}
+
+func sqliteDSN(path string) string {
+	if strings.HasPrefix(path, "file:") {
+		if strings.Contains(path, "_pragma=foreign_keys") {
+			return path
+		}
+		sep := "?"
+		if strings.Contains(path, "?") {
+			sep = "&"
+		}
+		return path + sep + "_pragma=foreign_keys(1)"
+	}
+	return fmt.Sprintf("file:%s?_pragma=foreign_keys(1)", path)
 }
 
 func (s *SQLiteStore) init() error {

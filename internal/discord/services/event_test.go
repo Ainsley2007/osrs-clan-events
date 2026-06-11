@@ -120,14 +120,15 @@ func errNoActiveEvent() error {
 	return database.ErrNoActiveEvent
 }
 
-func TestStartNewEventFromRollover_callsCreateInitialSnapshotsForEventsFromStats(t *testing.T) {
+func TestPrepareAndCommitRolloverEvent(t *testing.T) {
 	ctx := context.Background()
 	startTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
 
 	var createdEvent *database.Event
 	eventStore := &fakeEventStore{
 		getActiveEventFn: func(ctx context.Context, guildID, eventType string) (*database.Event, error) {
-			return nil, database.ErrNoActiveEvent
+			// old event expired — IsEventRunning returns false, so prepare succeeds
+			return &database.Event{EndTime: startTime.Add(-time.Minute)}, nil
 		},
 		getAllEventsByGuildAndTypeFn: func(ctx context.Context, guildID, eventType string) ([]*database.Event, error) {
 			return nil, nil
@@ -147,19 +148,28 @@ func TestStartNewEventFromRollover_callsCreateInitialSnapshotsForEventsFromStats
 		1: {Skills: []osrs.Skill{{Name: "Vorkath", XP: 100}}},
 	}
 
-	result, err := svc.StartNewEventFromRollover(ctx, "guild1", "botw", startTime, statsByAccountID)
+	prepared, err := svc.PrepareRolloverEvent(ctx, "guild1", "botw", startTime)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("PrepareRolloverEvent: unexpected error: %v", err)
+	}
+	if prepared == nil {
+		t.Fatal("expected non-nil PreparedRolloverEvent")
+	}
+	if prepared.MetricName != "Vorkath" {
+		t.Fatalf("expected MetricName Vorkath, got %q", prepared.MetricName)
+	}
+	if fakeSnapshot.callCount != 0 {
+		t.Fatalf("PrepareRolloverEvent must not write snapshots, got %d calls", fakeSnapshot.callCount)
+	}
+	if createdEvent != nil {
+		t.Fatal("PrepareRolloverEvent must not persist the event")
 	}
 
+	if err := svc.CommitRolloverEvent(ctx, prepared, statsByAccountID); err != nil {
+		t.Fatalf("CommitRolloverEvent: unexpected error: %v", err)
+	}
 	if createdEvent == nil {
-		t.Fatal("expected event to be created")
-	}
-	if result.Event != createdEvent {
-		t.Fatal("expected result.Event to be the created event")
-	}
-	if result.MetricName != "Vorkath" {
-		t.Fatalf("expected MetricName Vorkath, got %q", result.MetricName)
+		t.Fatal("expected event to be created after CommitRolloverEvent")
 	}
 	if fakeSnapshot.callCount != 1 {
 		t.Fatalf("expected CreateInitialSnapshotsForEventsFromStats to be called once, got %d", fakeSnapshot.callCount)
