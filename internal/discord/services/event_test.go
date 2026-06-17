@@ -52,7 +52,7 @@ func TestIsEventRunning(t *testing.T) {
 					return test.getEvent()
 				},
 			}
-			service := NewEventService(store, nil, nil)
+			service := NewEventService(store, nil, nil, nil)
 
 			active, err := service.IsEventRunning(context.Background(), "guild", "botw")
 			if test.expectErr && err == nil {
@@ -82,7 +82,7 @@ func TestCreateEvent(t *testing.T) {
 		},
 	}
 
-	service := NewEventService(store, nil, nil)
+	service := NewEventService(store, nil, nil, nil)
 	event := &database.Event{
 		GuildID:      "test-guild",
 		Type:         "botw",
@@ -143,7 +143,7 @@ func TestPrepareAndCommitRolloverEvent(t *testing.T) {
 	fakeSnapshot := &fakeSnapshotManagerForRollover{}
 	configProvider := &fakeOSRSConfigProvider{}
 
-	svc := NewEventService(eventStore, fakeSnapshot, configProvider)
+	svc := NewEventService(eventStore, fakeSnapshot, configProvider, nil)
 	statsByAccountID := map[int64]*osrs.PlayerStats{
 		1: {Skills: []osrs.Skill{{Name: "Vorkath", XP: 100}}},
 	}

@@ -18,13 +18,15 @@ type EventService struct {
 	store           EventStore
 	snapshotService SnapshotManager
 	configProvider  OSRSConfigProvider
+	logger          Logger
 }
 
-func NewEventService(store EventStore, snapshotService SnapshotManager, configProvider OSRSConfigProvider) *EventService {
+func NewEventService(store EventStore, snapshotService SnapshotManager, configProvider OSRSConfigProvider, logger Logger) *EventService {
 	return &EventService{
 		store:           store,
 		snapshotService: snapshotService,
 		configProvider:  configProvider,
+		logger:          logger,
 	}
 }
 
@@ -79,7 +81,8 @@ func (s *EventService) prepareBotwEvent(ctx context.Context, guildID string, sta
 	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "botw"); err == nil {
 		recentBosses = lastMetricNames(events, recentEventsWeightWindow)
 	}
-	bossConfig := weightedPickBoss(config.Bosses, recentBosses)
+	weights, totalWeight := metricPickWeights(config.Bosses, recentBosses, func(b firebase.BossConfig) string { return b.Name })
+	bossConfig, roll := weightedPickFromWeights(config.Bosses, weights, totalWeight)
 	bossesToTrackJSON, err := json.Marshal(bossConfig.BossesToTrack)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to marshal bosses to track: %w", err)
@@ -88,6 +91,7 @@ func (s *EventService) prepareBotwEvent(ctx context.Context, guildID string, sta
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get week number: %w", err)
 	}
+	s.logMetricSelection(guildID, "botw", bossConfig.Name, weekNumber, len(config.Bosses), weights, totalWeight, recentBosses, roll)
 	event := &database.Event{
 		GuildID:       guildID,
 		Type:          "botw",
@@ -144,11 +148,13 @@ func (s *EventService) prepareSotwEvent(ctx context.Context, guildID string, sta
 	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "sotw"); err == nil {
 		recentSkills = lastMetricNames(events, recentEventsWeightWindow)
 	}
-	skillConfig := weightedPickSkill(config.Skills, recentSkills)
+	weights, totalWeight := metricPickWeights(config.Skills, recentSkills, func(sk firebase.SkillConfig) string { return sk.Name })
+	skillConfig, roll := weightedPickFromWeights(config.Skills, weights, totalWeight)
 	weekNumber, err := s.GetNextWeekNumber(ctx, guildID, "sotw")
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get week number: %w", err)
 	}
+	s.logMetricSelection(guildID, "sotw", skillConfig.Name, weekNumber, len(config.Skills), weights, totalWeight, recentSkills, roll)
 	event := &database.Event{
 		GuildID:      guildID,
 		Type:         "sotw",
@@ -308,35 +314,97 @@ func countOccurrences(names []string) map[string]int {
 	return counts
 }
 
+type metricPickWeight struct {
+	Name   string
+	Count  int
+	Weight float64
+}
+
+type metricPickRoll struct {
+	Value      float64 // random value in [0, totalWeight); -1 when uniform fallback was used
+	UniformIdx int     // index from rand.Intn when uniform fallback was used; -1 otherwise
+}
+
 func weightedPickBoss(bosses []firebase.BossConfig, recentNames []string) *firebase.BossConfig {
-	return weightedPick(bosses, recentNames, func(b firebase.BossConfig) string { return b.Name })
+	weights, totalWeight := metricPickWeights(bosses, recentNames, func(b firebase.BossConfig) string { return b.Name })
+	picked, _ := weightedPickFromWeights(bosses, weights, totalWeight)
+	return picked
 }
 
 func weightedPickSkill(skills []firebase.SkillConfig, recentNames []string) *firebase.SkillConfig {
-	return weightedPick(skills, recentNames, func(s firebase.SkillConfig) string { return s.Name })
+	weights, totalWeight := metricPickWeights(skills, recentNames, func(s firebase.SkillConfig) string { return s.Name })
+	picked, _ := weightedPickFromWeights(skills, weights, totalWeight)
+	return picked
 }
 
-func weightedPick[T any](items []T, recentNames []string, nameOf func(T) string) *T {
+func metricPickWeights[T any](items []T, recentNames []string, nameOf func(T) string) ([]metricPickWeight, float64) {
 	counts := countOccurrences(recentNames)
+	weights := make([]metricPickWeight, len(items))
 	var totalWeight float64
-	weights := make([]float64, len(items))
 	for i, item := range items {
-		name := strings.ToLower(nameOf(item))
-		count := counts[name]
+		name := nameOf(item)
+		count := counts[strings.ToLower(name)]
 		w := 1.0 / float64(1+count)
-		weights[i] = w
+		weights[i] = metricPickWeight{Name: name, Count: count, Weight: w}
 		totalWeight += w
 	}
+	return weights, totalWeight
+}
+
+func weightedPickFromWeights[T any](items []T, weights []metricPickWeight, totalWeight float64) (*T, metricPickRoll) {
 	if totalWeight <= 0 {
 		i := rand.Intn(len(items))
-		return &items[i]
+		return &items[i], metricPickRoll{UniformIdx: i}
 	}
-	r := rand.Float64() * totalWeight
+	roll := rand.Float64() * totalWeight
+	r := roll
 	for i, w := range weights {
-		r -= w
+		r -= w.Weight
 		if r <= 0 {
-			return &items[i]
+			return &items[i], metricPickRoll{Value: roll}
 		}
 	}
-	return &items[len(items)-1]
+	return &items[len(items)-1], metricPickRoll{Value: roll}
+}
+
+func (s *EventService) logMetricSelection(guildID, eventType, selected string, weekNumber, candidateCount int, weights []metricPickWeight, totalWeight float64, recentNames []string, roll metricPickRoll) {
+	if s.logger == nil {
+		return
+	}
+	label := strings.ToUpper(eventType)
+	s.logger.Printf("[Guild %s] %s selection: remote config has %d candidates, %d recent events in %d-week window",
+		guildID, label, candidateCount, len(recentNames), recentEventsWeightWindow)
+	if len(recentNames) > 0 {
+		s.logger.Printf("[Guild %s] %s selection: recent history counts: %s",
+			guildID, label, formatOccurrenceCounts(countOccurrences(recentNames)))
+	}
+	s.logger.Printf("[Guild %s] %s selection: weights (total=%.3f): %s",
+		guildID, label, totalWeight, formatPickWeights(weights))
+	if roll.UniformIdx >= 0 {
+		s.logger.Printf("[Guild %s] %s selection: uniform roll index %d of %d (no weight total)",
+			guildID, label, roll.UniformIdx, candidateCount)
+	} else {
+		s.logger.Printf("[Guild %s] %s selection: roll=%.3f of %.3f",
+			guildID, label, roll.Value, totalWeight)
+	}
+	s.logger.Printf("[Guild %s] %s selection: picked %q for week %d", guildID, label, selected, weekNumber)
+}
+
+func formatPickWeights(weights []metricPickWeight) string {
+	parts := make([]string, len(weights))
+	for i, w := range weights {
+		parts[i] = fmt.Sprintf("%s(recent=%d, weight=%.3f)", w.Name, w.Count, w.Weight)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatOccurrenceCounts(counts map[string]int) string {
+	if len(counts) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(counts))
+	for name, count := range counts {
+		parts = append(parts, fmt.Sprintf("%s×%d", name, count))
+	}
+	return strings.Join(parts, ", ")
 }

@@ -41,7 +41,7 @@ func New(token string, store database.Store, osrsClient *osrs.Client, firebaseCl
 
 	logger := log.Default()
 	snapshotService := services.NewSnapshotService(store, osrsClient, logger)
-	eventService := services.NewEventService(store, snapshotService, firebaseClient)
+	eventService := services.NewEventService(store, snapshotService, firebaseClient, logger)
 	leaderboardService := services.NewLeaderboardService(store, dg, logger)
 
 	guildService := services.NewGuildService(store)
