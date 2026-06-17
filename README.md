@@ -111,14 +111,14 @@ make run
 # Build binary
 make build
 
-# Unit tests (skips Firebase integration test)
-go test -short ./...
+# Run tests
+go test ./...
 
-# Full tests including Firebase Remote Config fetch (needs valid credentials)
+# Optional: Firebase Remote Config integration test (needs valid credentials)
 go test ./internal/firebase/...
 ```
 
-CI runs `go test -short ./...` on push to `main` and on pull requests to `main` / `develop`. The Docker image is built and pushed only after tests pass on `main`.
+CI runs `go test ./...` on push to `main` and on pull requests to `main` / `develop`. The Docker image is built and pushed only after tests pass on `main`. The Firebase integration test skips automatically when credentials are not configured.
 
 ## Deployment
 

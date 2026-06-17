@@ -15,10 +15,6 @@ func init() {
 }
 
 func TestFetchOSRSConfig(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
 	credPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	if credPath == "" {
 		t.Skip("GOOGLE_APPLICATION_CREDENTIALS not set, skipping integration test")

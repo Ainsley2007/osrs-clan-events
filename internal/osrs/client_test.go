@@ -11,133 +11,7 @@ import (
 	"time"
 )
 
-func TestGetPlayerStats_ExistingAccount(t *testing.T) {
-	client := NewClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	stats, err := client.GetPlayerStats(ctx, "FePrototype")
-	if err != nil {
-		t.Fatalf("expected no error for existing account, got: %v", err)
-	}
-
-	if stats == nil {
-		t.Fatal("expected stats to be non-nil")
-	}
-
-	if stats.Name != "FePrototype" {
-		t.Errorf("expected name 'FePrototype', got '%s'", stats.Name)
-	}
-
-	if len(stats.Skills) == 0 {
-		t.Error("expected skills to be populated")
-	}
-
-	if len(stats.Skills) < 25 {
-		t.Errorf("expected at least 25 skills, got %d", len(stats.Skills))
-	}
-
-	if len(stats.Activities) == 0 {
-		t.Error("expected activities to be populated")
-	}
-
-	overallSkill := stats.Skills[0]
-	if overallSkill.Name != "Overall" {
-		t.Errorf("expected first skill to be 'Overall', got '%s'", overallSkill.Name)
-	}
-
-	if overallSkill.Level < 100 {
-		t.Errorf("expected FePrototype to have high total level, got %d", overallSkill.Level)
-	}
-
-	if overallSkill.XP <= 0 {
-		t.Error("expected Overall XP to be greater than 0")
-	}
-
-	t.Logf("FePrototype stats: Total Level=%d, Total XP=%d, Skills=%d, Activities=%d",
-		overallSkill.Level, overallSkill.XP, len(stats.Skills), len(stats.Activities))
-}
-
-func TestGetPlayerStats_NonExistentAccount(t *testing.T) {
-	client := NewClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	stats, err := client.GetPlayerStats(ctx, "lion1002")
-	if err == nil {
-		t.Fatal("expected error for non-existent account, got nil")
-	}
-
-	if stats != nil {
-		t.Errorf("expected stats to be nil for non-existent account, got: %+v", stats)
-	}
-
-	var notFoundErr *PlayerNotFoundError
-	if !errors.As(err, &notFoundErr) {
-		t.Errorf("expected PlayerNotFoundError, got: %T - %v", err, err)
-	}
-
-	if notFoundErr.RSN != "lion1002" {
-		t.Errorf("expected error to contain RSN 'lion1002', got '%s'", notFoundErr.RSN)
-	}
-
-	t.Logf("Correctly returned PlayerNotFoundError: %v", err)
-}
-
-func TestPlayerExists_ExistingAccount(t *testing.T) {
-	client := NewClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	exists, err := client.PlayerExists(ctx, "FePrototype")
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-
-	if !exists {
-		t.Error("expected FePrototype to exist")
-	}
-
-	t.Log("FePrototype exists: true")
-}
-
-func TestPlayerExists_NonExistentAccount(t *testing.T) {
-	client := NewClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	exists, err := client.PlayerExists(ctx, "lion1002")
-	if err != nil {
-		t.Fatalf("expected no error for non-existent check, got: %v", err)
-	}
-
-	if exists {
-		t.Error("expected lion1002 to not exist")
-	}
-
-	t.Log("lion1002 exists: false")
-}
-
-func TestRateLimiter(t *testing.T) {
-	client := NewClient()
-	ctx := context.Background()
-
-	start := time.Now()
-
-	for i := 0; i < 3; i++ {
-		_, _ = client.GetPlayerStats(ctx, "FePrototype")
-	}
-
-	elapsed := time.Since(start)
-
-	if elapsed < 2*time.Second {
-		t.Logf("Warning: Rate limiting may not be working as expected. 3 requests took %v", elapsed)
-	} else {
-		t.Logf("Rate limiter working: 3 requests took %v", elapsed)
-	}
-}
-
-const fakeStatsJSON = `{"name":"TestPlayer","skills":[{"id":0,"name":"Overall","rank":1,"level":2277,"xp":200000000}],"activities":[]}`
+const fakeStatsJSON = `{"name":"TestPlayer","skills":[{"id":0,"name":"Overall","rank":1,"level":2277,"xp":200000000}],"activities":[{"id":0,"name":"Zulrah","rank":1,"score":100}]}`
 
 func newTestClient(server *httptest.Server) *Client {
 	return &Client{
@@ -145,6 +19,117 @@ func newTestClient(server *httptest.Server) *Client {
 		rateLimiter:  NewRateLimiter(),
 		baseURL:      server.URL,
 		retryBackoff: 1 * time.Millisecond,
+	}
+}
+
+func TestGetPlayerStats_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("player"); got != "TestPlayer" {
+			t.Errorf("unexpected player query: %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, fakeStatsJSON)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	stats, err := client.GetPlayerStats(context.Background(), "TestPlayer")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if stats == nil {
+		t.Fatal("expected stats to be non-nil")
+	}
+	if stats.Name != "TestPlayer" {
+		t.Errorf("expected name TestPlayer, got %q", stats.Name)
+	}
+	if len(stats.Skills) == 0 {
+		t.Error("expected skills to be populated")
+	}
+	if stats.Skills[0].Name != "Overall" {
+		t.Errorf("expected first skill Overall, got %q", stats.Skills[0].Name)
+	}
+	if len(stats.Activities) == 0 {
+		t.Error("expected activities to be populated")
+	}
+}
+
+func TestGetPlayerStats_NonExistentAccount(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	stats, err := client.GetPlayerStats(context.Background(), "UnknownPlayer")
+	if err == nil {
+		t.Fatal("expected error for non-existent account, got nil")
+	}
+	if stats != nil {
+		t.Errorf("expected nil stats, got: %+v", stats)
+	}
+
+	var notFoundErr *PlayerNotFoundError
+	if !errors.As(err, &notFoundErr) {
+		t.Fatalf("expected PlayerNotFoundError, got: %T - %v", err, err)
+	}
+	if notFoundErr.RSN != "UnknownPlayer" {
+		t.Errorf("expected RSN UnknownPlayer, got %q", notFoundErr.RSN)
+	}
+}
+
+func TestPlayerExists_ExistingAccount(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, fakeStatsJSON)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	exists, err := client.PlayerExists(context.Background(), "TestPlayer")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if !exists {
+		t.Error("expected player to exist")
+	}
+}
+
+func TestPlayerExists_NonExistentAccount(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	exists, err := client.PlayerExists(context.Background(), "UnknownPlayer")
+	if err != nil {
+		t.Fatalf("expected no error for non-existent check, got: %v", err)
+	}
+	if exists {
+		t.Error("expected player to not exist")
+	}
+}
+
+func TestRateLimiter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, fakeStatsJSON)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	start := time.Now()
+	for i := 0; i < 6; i++ {
+		if _, err := client.GetPlayerStats(context.Background(), "TestPlayer"); err != nil {
+			t.Fatalf("request %d: %v", i, err)
+		}
+	}
+	elapsed := time.Since(start)
+
+	// Burst is 5; the 6th request should wait for the next token (~1s).
+	if elapsed < 800*time.Millisecond {
+		t.Errorf("expected rate limiting delay after burst, 6 requests took %v", elapsed)
 	}
 }
 
@@ -197,8 +182,6 @@ func TestParseRetryAfter(t *testing.T) {
 }
 
 func TestGetPlayerStats_429WithRetryAfterHonored(t *testing.T) {
-	// Server returns 429 with Retry-After: 0 (no extra wait) then 200.
-	// Verifies that a Retry-After header is read without causing failures.
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := calls.Add(1)
@@ -239,7 +222,6 @@ func TestGetPlayerStats_429Exhaustion_ReturnsRateLimitError(t *testing.T) {
 	if !errors.As(err, &rlErr) {
 		t.Errorf("expected *RateLimitError, got %T: %v", err, err)
 	}
-	// 1 initial attempt + maxRetries retries
 	if got := calls.Load(); got != maxRetries+1 {
 		t.Errorf("expected %d HTTP calls, got %d", maxRetries+1, got)
 	}
