@@ -23,6 +23,9 @@ func TestFetchOSRSConfig(t *testing.T) {
 	if credPath == "" {
 		t.Skip("GOOGLE_APPLICATION_CREDENTIALS not set, skipping integration test")
 	}
+	if _, err := os.Stat(credPath); err != nil {
+		t.Skipf("credentials file not found at %s, skipping integration test", credPath)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
