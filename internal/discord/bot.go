@@ -144,6 +144,8 @@ func (b *Bot) handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionC
 		b.handleRSNAutocomplete(s, i)
 	case "submit-pb":
 		b.handlePBCategoryAutocomplete(s, i)
+	case "queue-event":
+		b.handleQueueEventAutocomplete(s, i)
 	}
 }
 

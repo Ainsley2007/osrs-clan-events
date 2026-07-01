@@ -35,11 +35,12 @@ const recentEventsWeightWindow = 52 // 52 weeks in a year
 type StartEventResult struct {
 	Event          *database.Event
 	MetricName     string
+	FromQueue      bool
 	SnapshotResult *InitialSnapshotResult
 }
 
 func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime time.Time) (*StartEventResult, error) {
-	event, metricName, err := s.prepareBotwEvent(ctx, guildID, startTime)
+	event, metricName, fromQueue, err := s.prepareBotwEvent(ctx, guildID, startTime)
 	if err != nil {
 		return nil, err
 	}
@@ -53,45 +54,67 @@ func (s *EventService) StartBotw(ctx context.Context, guildID string, startTime 
 	return &StartEventResult{
 		Event:          event,
 		MetricName:     metricName,
+		FromQueue:      fromQueue,
 		SnapshotResult: snapshotResult,
 	}, nil
 }
 
 // prepareBotwEvent builds a BOTW event (not persisted). Caller must CreateEvent and then create initial snapshots.
-func (s *EventService) prepareBotwEvent(ctx context.Context, guildID string, startTime time.Time) (*database.Event, string, error) {
+func (s *EventService) prepareBotwEvent(ctx context.Context, guildID string, startTime time.Time) (*database.Event, string, bool, error) {
 	isRunning, err := s.IsEventRunning(ctx, guildID, "botw")
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to check event status: %w", err)
+		return nil, "", false, fmt.Errorf("failed to check event status: %w", err)
 	}
 	if isRunning {
 		activeEvent, _ := s.GetActiveEvent(ctx, guildID, "botw")
 		if activeEvent != nil {
-			return nil, "", fmt.Errorf("⏰ A BOTW competition is already running! Ends: %s", activeEvent.EndTime.Format("2006-01-02 15:04"))
+			return nil, "", false, fmt.Errorf("⏰ A BOTW competition is already running! Ends: %s", activeEvent.EndTime.Format("2006-01-02 15:04"))
 		}
-		return nil, "", fmt.Errorf("⏰ A BOTW competition is already running!")
+		return nil, "", false, fmt.Errorf("⏰ A BOTW competition is already running!")
 	}
 	config, err := s.configProvider.FetchOSRSConfig(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to fetch OSRS config: %w", err)
+		return nil, "", false, fmt.Errorf("failed to fetch OSRS config: %w", err)
 	}
 	if len(config.Bosses) == 0 {
-		return nil, "", fmt.Errorf("no bosses configured")
+		return nil, "", false, fmt.Errorf("no bosses configured")
 	}
 	var recentBosses []string
 	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "botw"); err == nil {
 		recentBosses = lastMetricNames(events, recentEventsWeightWindow)
 	}
-	weights, totalWeight := metricPickWeights(config.Bosses, recentBosses, func(b firebase.BossConfig) string { return b.Name })
-	bossConfig, roll := weightedPickFromWeights(config.Bosses, weights, totalWeight)
+
+	var bossConfig *firebase.BossConfig
+	var roll metricPickRoll
+	fromQueue := false
+	if queuedBoss, queued, err := s.pickQueuedBossConfig(ctx, guildID, config.Bosses); err != nil {
+		return nil, "", false, err
+	} else if queued {
+		bossConfig = queuedBoss
+		fromQueue = true
+	} else {
+		weights, totalWeight := metricPickWeights(config.Bosses, recentBosses, func(b firebase.BossConfig) string { return b.Name })
+		var picked *firebase.BossConfig
+		picked, roll = weightedPickFromWeights(config.Bosses, weights, totalWeight)
+		bossConfig = picked
+	}
+
 	bossesToTrackJSON, err := json.Marshal(bossConfig.BossesToTrack)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to marshal bosses to track: %w", err)
+		return nil, "", false, fmt.Errorf("failed to marshal bosses to track: %w", err)
 	}
 	weekNumber, err := s.GetNextWeekNumber(ctx, guildID, "botw")
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to get week number: %w", err)
+		return nil, "", false, fmt.Errorf("failed to get week number: %w", err)
 	}
-	s.logMetricSelection(guildID, "botw", bossConfig.Name, weekNumber, len(config.Bosses), weights, totalWeight, recentBosses, roll)
+	if fromQueue {
+		if s.logger != nil {
+			s.logger.Printf("[Guild %s] BOTW selection: using queued metric %q for week %d", guildID, bossConfig.Name, weekNumber)
+		}
+	} else {
+		weights, totalWeight := metricPickWeights(config.Bosses, recentBosses, func(b firebase.BossConfig) string { return b.Name })
+		s.logMetricSelection(guildID, "botw", bossConfig.Name, weekNumber, len(config.Bosses), weights, totalWeight, recentBosses, roll)
+	}
 	event := &database.Event{
 		GuildID:       guildID,
 		Type:          "botw",
@@ -102,11 +125,11 @@ func (s *EventService) prepareBotwEvent(ctx context.Context, guildID string, sta
 		PointsPerKC:   bossConfig.PointsPerKC,
 		ThresholdKC:   bossConfig.ThresholdKC,
 	}
-	return event, bossConfig.Name, nil
+	return event, bossConfig.Name, fromQueue, nil
 }
 
 func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime time.Time) (*StartEventResult, error) {
-	event, metricName, err := s.prepareSotwEvent(ctx, guildID, startTime)
+	event, metricName, fromQueue, err := s.prepareSotwEvent(ctx, guildID, startTime)
 	if err != nil {
 		return nil, err
 	}
@@ -120,41 +143,63 @@ func (s *EventService) StartSotw(ctx context.Context, guildID string, startTime 
 	return &StartEventResult{
 		Event:          event,
 		MetricName:     metricName,
+		FromQueue:      fromQueue,
 		SnapshotResult: snapshotResult,
 	}, nil
 }
 
 // prepareSotwEvent builds a SOTW event (not persisted). Caller must CreateEvent and then create initial snapshots.
-func (s *EventService) prepareSotwEvent(ctx context.Context, guildID string, startTime time.Time) (*database.Event, string, error) {
+func (s *EventService) prepareSotwEvent(ctx context.Context, guildID string, startTime time.Time) (*database.Event, string, bool, error) {
 	isRunning, err := s.IsEventRunning(ctx, guildID, "sotw")
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to check event status: %w", err)
+		return nil, "", false, fmt.Errorf("failed to check event status: %w", err)
 	}
 	if isRunning {
 		activeEvent, _ := s.GetActiveEvent(ctx, guildID, "sotw")
 		if activeEvent != nil {
-			return nil, "", fmt.Errorf("⏰ A SOTW competition is already running! Ends: %s", activeEvent.EndTime.Format("2006-01-02 15:04"))
+			return nil, "", false, fmt.Errorf("⏰ A SOTW competition is already running! Ends: %s", activeEvent.EndTime.Format("2006-01-02 15:04"))
 		}
-		return nil, "", fmt.Errorf("⏰ A SOTW competition is already running!")
+		return nil, "", false, fmt.Errorf("⏰ A SOTW competition is already running!")
 	}
 	config, err := s.configProvider.FetchOSRSConfig(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to fetch OSRS config: %w", err)
+		return nil, "", false, fmt.Errorf("failed to fetch OSRS config: %w", err)
 	}
 	if len(config.Skills) == 0 {
-		return nil, "", fmt.Errorf("no skills configured")
+		return nil, "", false, fmt.Errorf("no skills configured")
 	}
 	var recentSkills []string
 	if events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, "sotw"); err == nil {
 		recentSkills = lastMetricNames(events, recentEventsWeightWindow)
 	}
-	weights, totalWeight := metricPickWeights(config.Skills, recentSkills, func(sk firebase.SkillConfig) string { return sk.Name })
-	skillConfig, roll := weightedPickFromWeights(config.Skills, weights, totalWeight)
+
+	var skillConfig *firebase.SkillConfig
+	var roll metricPickRoll
+	fromQueue := false
+	if queuedSkill, queued, err := s.pickQueuedSkillConfig(ctx, guildID, config.Skills); err != nil {
+		return nil, "", false, err
+	} else if queued {
+		skillConfig = queuedSkill
+		fromQueue = true
+	} else {
+		weights, totalWeight := metricPickWeights(config.Skills, recentSkills, func(sk firebase.SkillConfig) string { return sk.Name })
+		var picked *firebase.SkillConfig
+		picked, roll = weightedPickFromWeights(config.Skills, weights, totalWeight)
+		skillConfig = picked
+	}
+
 	weekNumber, err := s.GetNextWeekNumber(ctx, guildID, "sotw")
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to get week number: %w", err)
+		return nil, "", false, fmt.Errorf("failed to get week number: %w", err)
 	}
-	s.logMetricSelection(guildID, "sotw", skillConfig.Name, weekNumber, len(config.Skills), weights, totalWeight, recentSkills, roll)
+	if fromQueue {
+		if s.logger != nil {
+			s.logger.Printf("[Guild %s] SOTW selection: using queued metric %q for week %d", guildID, skillConfig.Name, weekNumber)
+		}
+	} else {
+		weights, totalWeight := metricPickWeights(config.Skills, recentSkills, func(sk firebase.SkillConfig) string { return sk.Name })
+		s.logMetricSelection(guildID, "sotw", skillConfig.Name, weekNumber, len(config.Skills), weights, totalWeight, recentSkills, roll)
+	}
 	event := &database.Event{
 		GuildID:      guildID,
 		Type:         "sotw",
@@ -164,7 +209,7 @@ func (s *EventService) prepareSotwEvent(ctx context.Context, guildID string, sta
 		PointsPerXP:  skillConfig.PointsPerXP,
 		XPThreshold:  skillConfig.XPThreshold,
 	}
-	return event, skillConfig.Name, nil
+	return event, skillConfig.Name, fromQueue, nil
 }
 
 // createSnapshotsIfStarted creates initial snapshots when the event's start time is now or in the past.
@@ -196,7 +241,11 @@ func (s *EventService) CreateEvent(ctx context.Context, event *database.Event) e
 	// Events run for exactly 7 days (± a few seconds for processing)
 	event.EndTime = event.StartTime.Add(7 * 24 * time.Hour)
 	event.IsActive = true
-	return s.store.CreateEvent(ctx, event)
+	if err := s.store.CreateEvent(ctx, event); err != nil {
+		return err
+	}
+	s.consumeQueueHeadIfMatches(ctx, event.GuildID, event.Type, event.MetricJsonID)
+	return nil
 }
 
 func (s *EventService) GetActiveEvent(ctx context.Context, guildID, eventType string) (*database.Event, error) {
@@ -255,24 +304,24 @@ func (s *EventService) StartNewEvent(ctx context.Context, guildID string, eventT
 type PreparedRolloverEvent struct {
 	Event      *database.Event
 	MetricName string
+	FromQueue  bool
 }
 
 // PrepareRolloverEvent selects the next metric and builds the new event without persisting anything.
-// It may be called while the old event is still active in the DB (rollover knows it is replacing it).
-// Any config-fetch or metric-selection failure is surfaced here before any mutations occur.
 func (s *EventService) PrepareRolloverEvent(ctx context.Context, guildID, eventType string, startTime time.Time) (*PreparedRolloverEvent, error) {
 	var event *database.Event
 	var metricName string
+	var fromQueue bool
 	var err error
 	if eventType == "botw" {
-		event, metricName, err = s.prepareBotwEvent(ctx, guildID, startTime)
+		event, metricName, fromQueue, err = s.prepareBotwEvent(ctx, guildID, startTime)
 	} else {
-		event, metricName, err = s.prepareSotwEvent(ctx, guildID, startTime)
+		event, metricName, fromQueue, err = s.prepareSotwEvent(ctx, guildID, startTime)
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &PreparedRolloverEvent{Event: event, MetricName: metricName}, nil
+	return &PreparedRolloverEvent{Event: event, MetricName: metricName, FromQueue: fromQueue}, nil
 }
 
 // CommitRolloverEvent persists a PreparedRolloverEvent and seeds its initial snapshots from

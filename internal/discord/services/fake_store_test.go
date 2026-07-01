@@ -11,9 +11,79 @@ import (
 )
 
 type fakeEventStore struct {
-	getActiveEventFn  func(ctx context.Context, guildID, eventType string) (*database.Event, error)
-	createEventFn     func(ctx context.Context, event *database.Event) error
+	getActiveEventFn             func(ctx context.Context, guildID, eventType string) (*database.Event, error)
+	createEventFn                func(ctx context.Context, event *database.Event) error
 	getAllEventsByGuildAndTypeFn func(ctx context.Context, guildID, eventType string) ([]*database.Event, error)
+	metricQueues                 map[string][]string
+}
+
+func fakeEventStoreKey(guildID, eventType string) string {
+	return guildID + ":" + eventType
+}
+
+func (f *fakeEventStore) ListMetricQueue(_ context.Context, guildID, eventType string) ([]string, error) {
+	if f.metricQueues == nil {
+		return nil, nil
+	}
+	q := f.metricQueues[fakeEventStoreKey(guildID, eventType)]
+	out := make([]string, len(q))
+	copy(out, q)
+	return out, nil
+}
+
+func (f *fakeEventStore) AppendMetricQueue(_ context.Context, guildID, eventType, metricName string) error {
+	if f.metricQueues == nil {
+		f.metricQueues = make(map[string][]string)
+	}
+	key := fakeEventStoreKey(guildID, eventType)
+	f.metricQueues[key] = append(f.metricQueues[key], metricName)
+	return nil
+}
+
+func (f *fakeEventStore) PeekMetricQueue(_ context.Context, guildID, eventType string) (string, error) {
+	if f.metricQueues == nil {
+		return "", nil
+	}
+	q := f.metricQueues[fakeEventStoreKey(guildID, eventType)]
+	if len(q) == 0 {
+		return "", nil
+	}
+	return q[0], nil
+}
+
+func (f *fakeEventStore) PopMetricQueue(_ context.Context, guildID, eventType string) (string, error) {
+	if f.metricQueues == nil {
+		return "", nil
+	}
+	key := fakeEventStoreKey(guildID, eventType)
+	q := f.metricQueues[key]
+	if len(q) == 0 {
+		return "", nil
+	}
+	head := q[0]
+	f.metricQueues[key] = q[1:]
+	return head, nil
+}
+
+func (f *fakeEventStore) RemoveMetricQueueAt(_ context.Context, guildID, eventType string, position int) (string, error) {
+	if position < 1 {
+		return "", fmt.Errorf("position must be at least 1")
+	}
+	key := fakeEventStoreKey(guildID, eventType)
+	q := f.metricQueues[key]
+	if position > len(q) {
+		return "", fmt.Errorf("no queue entry at position %d", position)
+	}
+	removed := q[position-1]
+	f.metricQueues[key] = append(q[:position-1], q[position:]...)
+	return removed, nil
+}
+
+func (f *fakeEventStore) ClearMetricQueue(_ context.Context, guildID, eventType string) (int, error) {
+	key := fakeEventStoreKey(guildID, eventType)
+	n := len(f.metricQueues[key])
+	delete(f.metricQueues, key)
+	return n, nil
 }
 
 func (f *fakeEventStore) GetActiveEvent(ctx context.Context, guildID, eventType string) (*database.Event, error) {

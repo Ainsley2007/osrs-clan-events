@@ -86,7 +86,8 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 		}
 		if guild.LogChannelID != "" {
 			SendCompetitionStartedLog(s, guild.LogChannelID, botwResult.MetricName, sotwResult.MetricName,
-				botwResult.Event.WeekNumber, sotwResult.Event.WeekNumber, i.Member.User.ID)
+				botwResult.Event.WeekNumber, sotwResult.Event.WeekNumber,
+				botwResult.FromQueue, sotwResult.FromQueue, i.Member.User.ID)
 		}
 
 	}

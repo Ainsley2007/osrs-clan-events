@@ -74,6 +74,7 @@ Categories: `╔═══BOTW═══╗`, `╔═══SOTW═══╗`, and 
 |---------|-------------|
 | `/start` | Start BOTW and SOTW for the current week. |
 | `/stop` | End active competitions early and award points. |
+| `/queue-event` | Queue bosses (BOTW) or skills (SOTW) for upcoming weeks (`add`, `list`, `remove`, `clear`). |
 | `/addpoints` `user` `type` `amount` | Adjust BOTW or SOTW points (negative to subtract). |
 | `/setup-logging-channel` `channel` | Channel for competition and rollover logs. |
 | `/setup-donation-channel` `channel` | Channel for the donation leaderboard. |

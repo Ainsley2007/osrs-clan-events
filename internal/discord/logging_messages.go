@@ -9,15 +9,17 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func SendCompetitionStartedLog(s *discordgo.Session, channelID string, botwBoss, sotwSkill string, botwWeek, sotwWeek int, startedBy string) {
+func SendCompetitionStartedLog(s *discordgo.Session, channelID string, botwBoss, sotwSkill string, botwWeek, sotwWeek int, botwQueued, sotwQueued bool, startedBy string) {
 	if channelID == "" {
 		return
 	}
 
 	embed := &discordgo.MessageEmbed{
 		Title: "✅ Competitions Started",
-		Description: fmt.Sprintf("**BOTW:** %s (Week %d)\n**SOTW:** %s (Week %d)\n**Duration:** 7 days\n\nStarted by: <@%s>",
-			botwBoss, botwWeek, sotwSkill, sotwWeek, startedBy),
+		Description: fmt.Sprintf("**BOTW:** %s (Week %d) %s\n**SOTW:** %s (Week %d) %s\n**Duration:** 7 days\n\nStarted by: <@%s>",
+			botwBoss, botwWeek, selectionSourceLabel(botwQueued),
+			sotwSkill, sotwWeek, selectionSourceLabel(sotwQueued),
+			startedBy),
 		Color:     0x00AA00,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
@@ -80,6 +82,7 @@ type RolloverResult struct {
 	EventType  string
 	MetricName string
 	WeekNumber int
+	Queued     bool
 }
 
 func SendRolloverCompleteLog(s *discordgo.Session, channelID string, completedEvents []RolloverResult, newEvents []RolloverResult, unresolvedRSNs []string) {
@@ -100,7 +103,8 @@ func SendRolloverCompleteLog(s *discordgo.Session, channelID string, completedEv
 	if len(newEvents) > 0 {
 		description.WriteString("**New Competitions Started:**\n")
 		for _, event := range newEvents {
-			description.WriteString(fmt.Sprintf("- %s: %s (Week %d)\n", getEventDisplayName(event.EventType), event.MetricName, event.WeekNumber))
+			description.WriteString(fmt.Sprintf("- %s: %s (Week %d) %s\n",
+				getEventDisplayName(event.EventType), event.MetricName, event.WeekNumber, selectionSourceLabel(event.Queued)))
 		}
 		description.WriteString("\n")
 	}
@@ -150,5 +154,12 @@ func getEventDisplayName(eventType string) string {
 		return "Boss of the Week"
 	}
 	return "Skill of the Week"
+}
+
+func selectionSourceLabel(queued bool) string {
+	if queued {
+		return "— queued"
+	}
+	return "— random"
 }
 

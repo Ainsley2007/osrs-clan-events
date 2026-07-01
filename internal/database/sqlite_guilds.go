@@ -89,6 +89,7 @@ func deleteGuildData(ctx context.Context, tx *sql.Tx, guildID string) error {
 		`DELETE FROM pb_group_bundle_messages WHERE guild_id = ?`,
 		`DELETE FROM donations WHERE guild_id = ?`,
 		`DELETE FROM donation_spending WHERE guild_id = ?`,
+		`DELETE FROM metric_queue WHERE guild_id = ?`,
 		`DELETE FROM participants WHERE guild_id = ?`,
 		`DELETE FROM guilds WHERE guild_id = ?`,
 	}

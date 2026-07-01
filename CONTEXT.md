@@ -140,6 +140,10 @@ _Avoid_: PB Category, activity slug
 The configured set of bosses or skills eligible to be chosen as the Competition Metric for a new week.
 _Avoid_: Leaderboard group, command choices
 
+**Competition Metric Queue**:
+A per-guild FIFO list of Competition Metrics reserved for upcoming BOTW or SOTW weeks. The front entry is used when the next week starts (rollover or `/start`); when empty, selection falls back to weighted random from the Metric Pool.
+_Avoid_: Proof Queue, mid-week replace
+
 **Recent Metric History**:
 The record of Competition Metrics used in prior weeks for one guild and one competition type, used when picking the next metric.
 _Avoid_: PB records, proof queue

@@ -42,6 +42,12 @@ type EventStore interface {
 	GetAllEventsByGuildAndType(ctx context.Context, guildID string, eventType string) ([]*database.Event, error)
 	CreateEvent(ctx context.Context, event *database.Event) error
 	DeactivateEvent(ctx context.Context, eventID int64) error
+	ListMetricQueue(ctx context.Context, guildID, eventType string) ([]string, error)
+	AppendMetricQueue(ctx context.Context, guildID, eventType, metricName string) error
+	PeekMetricQueue(ctx context.Context, guildID, eventType string) (string, error)
+	PopMetricQueue(ctx context.Context, guildID, eventType string) (string, error)
+	RemoveMetricQueueAt(ctx context.Context, guildID, eventType string, position int) (string, error)
+	ClearMetricQueue(ctx context.Context, guildID, eventType string) (int, error)
 }
 
 // ParticipantStore is the minimal persistence interface for participant points workflows.

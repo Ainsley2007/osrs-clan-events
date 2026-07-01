@@ -238,6 +238,7 @@ func (s *Scheduler) rolloverGuild(ctx context.Context, guildID string, events []
 			EventType:  event.Type,
 			MetricName: prepared[i].MetricName,
 			WeekNumber: prepared[i].Event.WeekNumber,
+			Queued:     prepared[i].FromQueue,
 		})
 
 		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, event.GuildID, event.Type); err != nil {

@@ -24,6 +24,7 @@ func (b *Bot) setupCommands() {
 	b.registerCommand(b.useFundsCommand())
 	b.registerCommand(b.statsCommand())
 	b.registerCommand(b.submitPBCommand())
+	b.registerCommand(b.queueEventCommand())
 }
 
 func (b *Bot) registerCommand(cmd Command) {

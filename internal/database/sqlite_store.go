@@ -228,6 +228,16 @@ func (s *SQLiteStore) init() error {
 			created_by TEXT NOT NULL,
 			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
 		);`,
+		`CREATE TABLE IF NOT EXISTS metric_queue (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			guild_id TEXT NOT NULL,
+			event_type TEXT NOT NULL,
+			metric_name TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_metric_queue_guild_type
+			ON metric_queue(guild_id, event_type, id);`,
 	}
 
 	for _, query := range queries {

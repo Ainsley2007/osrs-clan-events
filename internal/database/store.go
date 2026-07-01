@@ -236,5 +236,12 @@ type Store interface {
 	UpdateDonationChannel(ctx context.Context, guildID, channelID string) error
 	UpdateDonationMessageID(ctx context.Context, guildID, messageID string) error
 
+	ListMetricQueue(ctx context.Context, guildID, eventType string) ([]string, error)
+	AppendMetricQueue(ctx context.Context, guildID, eventType, metricName string) error
+	PeekMetricQueue(ctx context.Context, guildID, eventType string) (string, error)
+	PopMetricQueue(ctx context.Context, guildID, eventType string) (string, error)
+	RemoveMetricQueueAt(ctx context.Context, guildID, eventType string, position int) (string, error)
+	ClearMetricQueue(ctx context.Context, guildID, eventType string) (int, error)
+
 	Close() error
 }
