@@ -504,11 +504,19 @@ func (s *SQLiteStore) seedPBCategories() error {
 			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Crystalline_Hunllef.png/320px-Crystalline_Hunllef.png",
 		},
 		{
+			slug:         "maggot_king",
+			displayName:  "Maggot King",
+			groupName:    "Solo & Duo Bosses (A-Z)",
+			groupOrder:   3,
+			displayOrder: 5,
+			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Maggot_King.png/560px-Maggot_King.png",
+		},
+		{
 			slug:         "phosanis_nightmare",
 			displayName:  "Phosani's Nightmare",
 			groupName:    "Solo & Duo Bosses (A-Z)",
 			groupOrder:   3,
-			displayOrder: 5,
+			displayOrder: 6,
 			imageURL:     "https://oldschool.runescape.wiki/images/thumb/The_Nightmare.png/250px-The_Nightmare.png",
 		},
 		{
@@ -516,7 +524,7 @@ func (s *SQLiteStore) seedPBCategories() error {
 			displayName:  "Yama",
 			groupName:    "Solo & Duo Bosses (A-Z)",
 			groupOrder:   3,
-			displayOrder: 6,
+			displayOrder: 7,
 			imageURL:     "https://oldschool.runescape.wiki/images/thumb/Yama.png/230px-Yama.png",
 		},
 		{

@@ -1,4 +1,6 @@
-# OSRS Events Bot Context
+# Concepts
+
+> Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
 This context defines the domain language for guild-managed competition features in the bot. It exists to keep feature naming consistent as BOTW/SOTW and PB systems evolve.
 

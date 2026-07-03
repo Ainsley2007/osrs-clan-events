@@ -126,5 +126,8 @@ Production deployment uses Docker on a Linux host with Watchtower for auto-updat
 
 ## Further reading
 
-- [CONTEXT.md](CONTEXT.md) — domain terminology (PB categories, rollover, proof queue, etc.)
+- [.cursor/rules/osrs-events.mdc](.cursor/rules/osrs-events.mdc) — Cursor agent context (always applied)
+- [AGENTS.md](AGENTS.md) — agent orientation for compound-engineering skills
+- [CONCEPTS.md](CONCEPTS.md) — domain terminology
+- [docs/solutions/](docs/solutions/) — documented solutions to past problems
 - [docs/adr/0001-durable-pb-proof-storage.md](docs/adr/0001-durable-pb-proof-storage.md) — why PB proofs use R2

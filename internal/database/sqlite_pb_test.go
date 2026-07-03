@@ -234,8 +234,8 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActivePBCategories returned error: %v", err)
 	}
-	if len(categories) != 30 {
-		t.Fatalf("expected 30 seeded categories, got %d", len(categories))
+	if len(categories) != 31 {
+		t.Fatalf("expected 31 seeded categories, got %d", len(categories))
 	}
 
 	wantOrder := []string{
@@ -245,7 +245,7 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		"vardorvis", "vardorvis_awakened",
 		"the_whisperer", "the_whisperer_awakened",
 		"corrupted_gauntlet", "demonic_brutus", "doom_of_mokhaiotl",
-		"gauntlet", "phosanis_nightmare", "yama",
+		"gauntlet", "maggot_king", "phosanis_nightmare", "yama",
 		"alchemical_hydra", "araxxor", "grotesque_guardians",
 		"phantom_muspah", "vorkath", "zulrah",
 		"cox_solo", "cox_trio",
@@ -288,9 +288,9 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		t.Fatalf("expected awakened duke to reuse normal duke thumbnail")
 	}
 
-	soloDuoGroup := categories[11:17]
-	if len(soloDuoGroup) != 6 {
-		t.Fatalf("expected 6 solo & duo categories, got %d", len(soloDuoGroup))
+	soloDuoGroup := categories[11:18]
+	if len(soloDuoGroup) != 7 {
+		t.Fatalf("expected 7 solo & duo categories, got %d", len(soloDuoGroup))
 	}
 	for i, category := range soloDuoGroup {
 		if category.GroupName != "Solo & Duo Bosses (A-Z)" {
@@ -304,7 +304,7 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		}
 	}
 
-	slayerGroup := categories[17:23]
+	slayerGroup := categories[18:24]
 	if len(slayerGroup) != 6 {
 		t.Fatalf("expected 6 slayer boss categories, got %d", len(slayerGroup))
 	}
@@ -320,7 +320,7 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		}
 	}
 
-	coxNormalGroup := categories[23:25]
+	coxNormalGroup := categories[24:26]
 	if len(coxNormalGroup) != 2 {
 		t.Fatalf("expected 2 Chambers of Xeric - Normal categories, got %d", len(coxNormalGroup))
 	}
@@ -336,7 +336,7 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		}
 	}
 
-	coxCMGroup := categories[25:27]
+	coxCMGroup := categories[26:28]
 	if len(coxCMGroup) != 2 {
 		t.Fatalf("expected 2 Chambers of Xeric - Challenge Mode categories, got %d", len(coxCMGroup))
 	}
@@ -352,7 +352,7 @@ func TestGetActivePBCategories_GroupedOrder(t *testing.T) {
 		}
 	}
 
-	toaGroup := categories[27:]
+	toaGroup := categories[28:]
 	if len(toaGroup) != 3 {
 		t.Fatalf("expected 3 Tombs of Amascut categories, got %d", len(toaGroup))
 	}
