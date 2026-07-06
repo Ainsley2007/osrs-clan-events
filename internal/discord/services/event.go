@@ -340,16 +340,14 @@ type metricPickRoll struct {
 	PickedIdx  int     // index into the candidate slice; -1 when not set
 }
 
-func weightedPickBoss(bosses []firebase.BossConfig, recentNames []string) *firebase.BossConfig {
+func weightedPickBoss(bosses []firebase.BossConfig, recentNames []string) (*firebase.BossConfig, metricPickRoll) {
 	weights, totalWeight := metricPickWeights(bosses, recentNames, func(b firebase.BossConfig) string { return b.Name })
-	picked, _ := weightedPickFromWeights(bosses, weights, totalWeight)
-	return picked
+	return weightedPickFromWeights(bosses, weights, totalWeight)
 }
 
-func weightedPickSkill(skills []firebase.SkillConfig, recentNames []string) *firebase.SkillConfig {
+func weightedPickSkill(skills []firebase.SkillConfig, recentNames []string) (*firebase.SkillConfig, metricPickRoll) {
 	weights, totalWeight := metricPickWeights(skills, recentNames, func(s firebase.SkillConfig) string { return s.Name })
-	picked, _ := weightedPickFromWeights(skills, weights, totalWeight)
-	return picked
+	return weightedPickFromWeights(skills, weights, totalWeight)
 }
 
 func metricPickWeights[T any](items []T, recentNames []string, nameOf func(T) string) ([]metricPickWeight, float64) {
@@ -367,6 +365,9 @@ func metricPickWeights[T any](items []T, recentNames []string, nameOf func(T) st
 }
 
 func weightedPickFromWeights[T any](items []T, weights []metricPickWeight, totalWeight float64) (*T, metricPickRoll) {
+	if len(items) == 0 {
+		return nil, metricPickRoll{}
+	}
 	if totalWeight <= 0 {
 		i := rand.Intn(len(items))
 		return &items[i], metricPickRoll{UniformIdx: i, PickedIdx: i}
