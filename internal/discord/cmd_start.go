@@ -74,6 +74,9 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 
 	sotwResult, err := b.eventService.StartSotw(ctx, i.GuildID, startTime)
 	if err != nil {
+		if abortErr := b.eventService.AbortStartedEvent(ctx, botwResult.Event); abortErr != nil {
+			log.Printf("Failed to roll back BOTW after SOTW start failed: %v", abortErr)
+		}
 		editDeferredWithError(s, i.Interaction, fmt.Errorf("failed to start SOTW: %w", err))
 		return
 	}

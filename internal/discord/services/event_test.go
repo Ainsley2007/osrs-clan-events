@@ -121,6 +121,25 @@ func errNoActiveEvent() error {
 	return database.ErrNoActiveEvent
 }
 
+func TestAbortStartedEvent_DeactivatesEvent(t *testing.T) {
+	var deactivatedID int64
+	store := &fakeEventStore{
+		deactivateEventFn: func(_ context.Context, eventID int64) error {
+			deactivatedID = eventID
+			return nil
+		},
+	}
+	svc := NewEventService(store, nil, nil, nil)
+
+	err := svc.AbortStartedEvent(context.Background(), &database.Event{ID: 42})
+	if err != nil {
+		t.Fatalf("AbortStartedEvent: %v", err)
+	}
+	if deactivatedID != 42 {
+		t.Fatalf("expected event 42 deactivated, got %d", deactivatedID)
+	}
+}
+
 func TestPrepareAndCommitRolloverEvent(t *testing.T) {
 	ctx := context.Background()
 	startTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)

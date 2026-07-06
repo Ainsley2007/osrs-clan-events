@@ -11,9 +11,10 @@ import (
 )
 
 type fakeEventStore struct {
-	getActiveEventFn  func(ctx context.Context, guildID, eventType string) (*database.Event, error)
-	createEventFn     func(ctx context.Context, event *database.Event) error
+	getActiveEventFn             func(ctx context.Context, guildID, eventType string) (*database.Event, error)
+	createEventFn                func(ctx context.Context, event *database.Event) error
 	getAllEventsByGuildAndTypeFn func(ctx context.Context, guildID, eventType string) ([]*database.Event, error)
+	deactivateEventFn            func(ctx context.Context, eventID int64) error
 }
 
 func (f *fakeEventStore) GetActiveEvent(ctx context.Context, guildID, eventType string) (*database.Event, error) {
@@ -37,7 +38,10 @@ func (f *fakeEventStore) CreateEvent(ctx context.Context, event *database.Event)
 	}
 	return fmt.Errorf("not implemented")
 }
-func (f *fakeEventStore) DeactivateEvent(context.Context, int64) error {
+func (f *fakeEventStore) DeactivateEvent(ctx context.Context, eventID int64) error {
+	if f.deactivateEventFn != nil {
+		return f.deactivateEventFn(ctx, eventID)
+	}
 	return fmt.Errorf("not implemented")
 }
 

@@ -246,6 +246,15 @@ func (s *EventService) CompleteEventWithoutSnapshotUpdate(ctx context.Context, e
 	return nil
 }
 
+// AbortStartedEvent deactivates a freshly created event when a paired start fails.
+// It does not award points or update snapshots.
+func (s *EventService) AbortStartedEvent(ctx context.Context, event *database.Event) error {
+	if event == nil {
+		return nil
+	}
+	return s.store.DeactivateEvent(ctx, event.ID)
+}
+
 // StartNewEvent creates a new event after the old one has been completed (e.g. manual /start).
 // Uses the API to create initial snapshots.
 func (s *EventService) StartNewEvent(ctx context.Context, guildID string, eventType string, startTime time.Time) (*StartEventResult, error) {
