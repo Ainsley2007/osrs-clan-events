@@ -78,8 +78,12 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				log.Printf("Failed to complete BOTW event: %v", err)
 				continue
 			}
-			count, _ := b.snapshotService.CountSnapshotsForEvent(ctx, event.ID)
-			botwPointsAwarded = count
+			count, err := b.snapshotService.CountSnapshotsForEvent(ctx, event.ID)
+			if err != nil {
+				log.Printf("Failed to count BOTW snapshots for event %d: %v", event.ID, err)
+			} else {
+				botwPointsAwarded = count
+			}
 		}
 
 		for _, event := range activeSotwEvents {
@@ -87,8 +91,12 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				log.Printf("Failed to complete SOTW event: %v", err)
 				continue
 			}
-			count, _ := b.snapshotService.CountSnapshotsForEvent(ctx, event.ID)
-			sotwPointsAwarded = count
+			count, err := b.snapshotService.CountSnapshotsForEvent(ctx, event.ID)
+			if err != nil {
+				log.Printf("Failed to count SOTW snapshots for event %d: %v", event.ID, err)
+			} else {
+				sotwPointsAwarded = count
+			}
 		}
 
 		if len(activeBotwEvents) > 0 || len(activeSotwEvents) > 0 {
