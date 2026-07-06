@@ -26,8 +26,7 @@ func (b *Bot) setupDonationChannelCommand() Command {
 				respondError(s, i.Interaction, fmt.Errorf("this command can only be used in a server"))
 				return
 			}
-			if !hasAdminPermission(s, i.GuildID, i.Member.User.ID) {
-				respondError(s, i.Interaction, fmt.Errorf("you must be an administrator to use this command"))
+			if _, ok := requireAdmin(s, i); !ok {
 				return
 			}
 
@@ -50,12 +49,12 @@ func (b *Bot) setupDonationChannelCommand() Command {
 
 			guildID := i.GuildID
 
-			if err := b.GuildService.UpdateDonationChannel(ctx, guildID, channelID); err != nil {
+			if err := b.guildService.UpdateDonationChannel(ctx, guildID, channelID); err != nil {
 				respondError(s, i.Interaction, err)
 				return
 			}
 
-			if err := b.DonationService.CreateOrUpdateLeaderboard(ctx, guildID); err != nil {
+			if err := b.donationService.CreateOrUpdateLeaderboard(ctx, guildID); err != nil {
 				respondError(s, i.Interaction, fmt.Errorf("failed to create leaderboard: %w", err))
 				return
 			}

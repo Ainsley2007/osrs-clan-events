@@ -20,21 +20,20 @@ func (b *Bot) stopCommand() Command {
 }
 
 func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if !hasAdminPermission(s, i.GuildID, i.Member.User.ID) {
-		respondError(s, i.Interaction, errors.New("you must be an administrator to use this command"))
+	if _, ok := requireAdmin(s, i); !ok {
 		return
 	}
 
 	ctx, cancel := cmdContext()
 	defer cancel()
 
-	activeBotwEvents, err := b.Store.GetActiveEvents(ctx, i.GuildID, "botw")
+	activeBotwEvents, err := b.eventService.GetActiveEvents(ctx, i.GuildID, "botw")
 	if err != nil {
 		respondError(s, i.Interaction, fmt.Errorf("failed to get BOTW events: %w", err))
 		return
 	}
 
-	activeSotwEvents, err := b.Store.GetActiveEvents(ctx, i.GuildID, "sotw")
+	activeSotwEvents, err := b.eventService.GetActiveEvents(ctx, i.GuildID, "sotw")
 	if err != nil {
 		respondError(s, i.Interaction, fmt.Errorf("failed to get SOTW events: %w", err))
 		return
@@ -63,42 +62,49 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	})
 
 	// Do heavy work asynchronously (completing events, leaderboard updates, logging)
-	go func() {
+	goSafe("stop", func() {
 		ctx, cancel := cmdContext()
 		defer cancel()
 		var botwPointsAwarded, sotwPointsAwarded int
 
 		for _, event := range activeBotwEvents {
-			if err := b.EventService.CompleteEvent(ctx, event); err != nil {
+			if err := b.eventService.CompleteEvent(ctx, event); err != nil {
 				log.Printf("Failed to complete BOTW event: %v", err)
 				continue
 			}
-			snapshots, _ := b.Store.GetSnapshotsWithAccounts(ctx, event.ID)
-			botwPointsAwarded = len(snapshots)
+			count, err := b.snapshotService.CountSnapshotsForEvent(ctx, event.ID)
+			if err != nil {
+				log.Printf("Failed to count BOTW snapshots for event %d: %v", event.ID, err)
+			} else {
+				botwPointsAwarded = count
+			}
 		}
 
 		for _, event := range activeSotwEvents {
-			if err := b.EventService.CompleteEvent(ctx, event); err != nil {
+			if err := b.eventService.CompleteEvent(ctx, event); err != nil {
 				log.Printf("Failed to complete SOTW event: %v", err)
 				continue
 			}
-			snapshots, _ := b.Store.GetSnapshotsWithAccounts(ctx, event.ID)
-			sotwPointsAwarded = len(snapshots)
+			count, err := b.snapshotService.CountSnapshotsForEvent(ctx, event.ID)
+			if err != nil {
+				log.Printf("Failed to count SOTW snapshots for event %d: %v", event.ID, err)
+			} else {
+				sotwPointsAwarded = count
+			}
 		}
 
-		// Update weekly and overall leaderboards (leaderboard service logs failures)
-		if len(activeBotwEvents) > 0 {
-			b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw")
-			b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw")
-		}
-		if len(activeSotwEvents) > 0 {
-			b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw")
-			b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw")
+		if len(activeBotwEvents) > 0 || len(activeSotwEvents) > 0 {
+			b.leaderboardService.RefreshLeaderboards(ctx, i.GuildID)
 		}
 
-		guild, err := b.Store.GetGuild(ctx, i.GuildID)
+		stoppedBy := ""
+		if actor, ok := interactionActor(i); ok {
+			stoppedBy = actor.ID
+		}
+
+		guild, err := b.guildService.GetGuild(ctx, i.GuildID)
 		if err == nil && guild.LogChannelID != "" {
-			SendCompetitionStoppedLog(s, guild.LogChannelID, stoppedEvents, botwPointsAwarded, sotwPointsAwarded, i.Member.User.ID)
+			sendCompetitionStoppedLog(s, guild.LogChannelID, stoppedEvents, botwPointsAwarded, sotwPointsAwarded, stoppedBy)
 		}
-	}()
+	})
 }

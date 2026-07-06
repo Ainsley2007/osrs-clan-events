@@ -50,8 +50,8 @@ func (b *Bot) handleAddPoints(s *discordgo.Session, i *discordgo.InteractionCrea
 		respondError(s, i.Interaction, errors.New("this command can only be used in a server"))
 		return
 	}
-	if !hasAdminPermission(s, i.GuildID, i.Member.User.ID) {
-		respondError(s, i.Interaction, errors.New("you must be an administrator to use this command"))
+	actor, ok := requireAdmin(s, i)
+	if !ok {
 		return
 	}
 
@@ -75,7 +75,7 @@ func (b *Bot) handleAddPoints(s *discordgo.Session, i *discordgo.InteractionCrea
 
 	ctx, cancel := cmdContext()
 	defer cancel()
-	err := b.ParticipantService.AddPoints(ctx, i.GuildID, targetUserID, eventType, amount)
+	err := b.participantService.AddPoints(ctx, i.GuildID, targetUserID, eventType, amount)
 	if err != nil {
 		if errors.Is(err, services.ErrParticipantNotFound) {
 			respondError(s, i.Interaction, errors.New("that user is not a participant in this server"))
@@ -91,9 +91,9 @@ func (b *Bot) handleAddPoints(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Added %s %s points to <@%s>.", formatPoints(int64(amount)), label, targetUserID))
 
-	b.LeaderboardService.RefreshLeaderboards(ctx, i.GuildID)
+	b.leaderboardService.RefreshLeaderboards(ctx, i.GuildID)
 
-	logMsg := fmt.Sprintf("➕ <@%s> added %s %s points to <@%s>.", i.Member.User.ID, formatPoints(int64(amount)), label, targetUserID)
+	logMsg := fmt.Sprintf("➕ <@%s> added %s %s points to <@%s>.", actor.ID, formatPoints(int64(amount)), label, targetUserID)
 	b.logAction(ctx, i.GuildID, logMsg)
 }
 

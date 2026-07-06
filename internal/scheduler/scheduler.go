@@ -5,8 +5,6 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 type Scheduler struct {
@@ -15,25 +13,28 @@ type Scheduler struct {
 	snapshotService    SnapshotService
 	leaderboardService LeaderboardService
 	initializerService InitializerService
-	session            *discordgo.Session
+	notifier           Notifier
 	clock              Clock
 	missingAccountMu   sync.Mutex
 	stopCompletion     chan struct{}
 	stopHourly         chan struct{}
 }
 
-func New(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, initializerService InitializerService, session *discordgo.Session) *Scheduler {
-	return NewWithClock(store, eventService, snapshotService, leaderboardService, initializerService, session, realClock{})
+func New(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, initializerService InitializerService, notifier Notifier) *Scheduler {
+	return NewWithClock(store, eventService, snapshotService, leaderboardService, initializerService, notifier, realClock{})
 }
 
-func NewWithClock(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, initializerService InitializerService, session *discordgo.Session, clock Clock) *Scheduler {
+func NewWithClock(store Store, eventService EventService, snapshotService SnapshotService, leaderboardService LeaderboardService, initializerService InitializerService, notifier Notifier, clock Clock) *Scheduler {
+	if notifier == nil {
+		notifier = noopNotifier{}
+	}
 	return &Scheduler{
 		store:              store,
 		eventService:       eventService,
 		snapshotService:    snapshotService,
 		leaderboardService: leaderboardService,
 		initializerService: initializerService,
-		session:            session,
+		notifier:           notifier,
 		clock:              clock,
 		stopCompletion:     make(chan struct{}),
 		stopHourly:         make(chan struct{}),

@@ -10,17 +10,17 @@ import (
 
 func (b *Bot) cleanupRemovedGuilds(ready *discordgo.Ready) {
 	log.Printf("Startup guild cleanup: waiting for guild cache (%d guild(s) in ready payload)", len(ready.Guilds))
-	waitForGuildCache(b.Session, ready)
+	waitForGuildCache(b.session, ready)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	sessionGuilds := make(map[string]struct{}, len(b.Session.State.Guilds))
-	for _, g := range b.Session.State.Guilds {
+	sessionGuilds := make(map[string]struct{}, len(b.session.State.Guilds))
+	for _, g := range b.session.State.Guilds {
 		sessionGuilds[g.ID] = struct{}{}
 	}
 
-	dbGuildIDs, err := b.Store.ListGuildIDs(ctx)
+	dbGuildIDs, err := b.guildService.ListGuildIDs(ctx)
 	if err != nil {
 		log.Printf("Startup guild cleanup: failed to list DB guilds: %v", err)
 		return
@@ -34,7 +34,7 @@ func (b *Bot) cleanupRemovedGuilds(ready *discordgo.Ready) {
 			continue
 		}
 		log.Printf("Startup guild cleanup: purging guild %s (bot no longer in server)", guildID)
-		if err := b.Store.DeleteGuild(ctx, guildID); err != nil {
+		if err := b.guildService.DeleteGuild(ctx, guildID); err != nil {
 			log.Printf("Startup guild cleanup: failed to purge guild %s: %v", guildID, err)
 			continue
 		}
@@ -42,7 +42,7 @@ func (b *Bot) cleanupRemovedGuilds(ready *discordgo.Ready) {
 	}
 
 	purgedOrphans := 0
-	if n, err := b.Store.PurgeOrphanedEvents(ctx); err != nil {
+	if n, err := b.guildService.PurgeOrphanedEvents(ctx); err != nil {
 		log.Printf("Startup guild cleanup: failed to purge orphaned events: %v", err)
 	} else {
 		purgedOrphans = n

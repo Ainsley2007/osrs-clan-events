@@ -36,7 +36,7 @@ func (b *Bot) trackedCommand() Command {
 				return
 			}
 
-			accounts, err := b.AccountService.GetTrackedAccounts(ctx, targetUser)
+			accounts, err := b.accountService.GetTrackedAccounts(ctx, targetUser)
 			if err != nil {
 				respondError(s, i.Interaction, err)
 				return

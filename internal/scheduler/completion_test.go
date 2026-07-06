@@ -150,7 +150,7 @@ func completionSchedulerWithEventService(store *mockCompletionStore, snapshot *m
 		snapshotService:    snapshot,
 		leaderboardService: &mockCompletionLeaderboardService{},
 		initializerService: &mockCompletionInitializerService{},
-		session:            nil,
+		notifier:           noopNotifier{},
 		clock:              realClock{},
 	}
 }

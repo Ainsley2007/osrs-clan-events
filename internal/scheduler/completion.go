@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"osrs-events/internal/database"
-	"osrs-events/internal/discord"
 	"osrs-events/internal/discord/services"
 	"osrs-events/internal/osrs"
 )
@@ -212,7 +211,7 @@ func (s *Scheduler) rolloverGuild(ctx context.Context, guildID string, events []
 		return
 	}
 
-	var completedEvents, newEvents []discord.RolloverResult
+	var completedEvents, newEvents []RolloverEvent
 	for i, event := range events {
 		if err := s.snapshotService.CalculateAndAwardPoints(ctx, event); err != nil {
 			log.Printf("[Guild %s] CRITICAL: failed to award points for event %d (%s): %v — aborting rollover", guildID, event.ID, event.Type, err)
@@ -229,12 +228,12 @@ func (s *Scheduler) rolloverGuild(ctx context.Context, guildID string, events []
 			return
 		}
 
-		completedEvents = append(completedEvents, discord.RolloverResult{
+		completedEvents = append(completedEvents, RolloverEvent{
 			EventType:  event.Type,
 			MetricName: event.MetricJsonID,
 			WeekNumber: event.WeekNumber,
 		})
-		newEvents = append(newEvents, discord.RolloverResult{
+		newEvents = append(newEvents, RolloverEvent{
 			EventType:  event.Type,
 			MetricName: prepared[i].MetricName,
 			WeekNumber: prepared[i].Event.WeekNumber,
@@ -266,7 +265,7 @@ func (s *Scheduler) rolloverGuild(ctx context.Context, guildID string, events []
 	}
 
 	unresolvedRSNs := s.unresolvedMissingAccountRSNs(ctx, guildID)
-	discord.SendRolloverCompleteLog(s.session, guild.LogChannelID, completedEvents, newEvents, unresolvedRSNs)
+	s.notifier.SendRolloverCompleteLog(guild.LogChannelID, completedEvents, newEvents, unresolvedRSNs)
 	if len(unresolvedRSNs) > 0 {
 		log.Printf("[Guild %s] Rollover Log sent (%d unresolved missing account(s))", guildID, len(unresolvedRSNs))
 	} else {

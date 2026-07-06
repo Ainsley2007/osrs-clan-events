@@ -21,6 +21,27 @@ func guildInitContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), guildInitTimeout)
 }
 
+func interactionActor(i *discordgo.InteractionCreate) (*discordgo.User, bool) {
+	if i == nil {
+		return nil, false
+	}
+	if i.Member != nil && i.Member.User != nil {
+		return i.Member.User, true
+	}
+	if i.User != nil {
+		return i.User, true
+	}
+	return nil, false
+}
+
+func interactionActorID(i *discordgo.InteractionCreate) (string, bool) {
+	user, ok := interactionActor(i)
+	if !ok || user.ID == "" {
+		return "", false
+	}
+	return user.ID, true
+}
+
 func ptr[T any](v T) *T { return &v }
 
 func parseUserMention(mention string) (string, error) {
@@ -38,7 +59,10 @@ func parseUserMention(mention string) (string, error) {
 
 func getTargetUser(s *discordgo.Session, i *discordgo.InteractionCreate, optionName string) (string, bool, error) {
 	data := i.ApplicationCommandData()
-	commandUser := i.Member.User.ID
+	commandUser, ok := interactionActorID(i)
+	if !ok {
+		return "", false, fmt.Errorf("could not resolve command user")
+	}
 
 	for _, opt := range data.Options {
 		if opt.Name == optionName {

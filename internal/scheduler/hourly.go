@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"osrs-events/internal/database"
-	"osrs-events/internal/discord"
 	"osrs-events/internal/discord/services"
 	"osrs-events/internal/osrs"
 )
@@ -90,8 +89,12 @@ func (s *Scheduler) updateActiveSnapshots() {
 	s.processMissingAccountNotifications(ctx, now, result)
 
 	for guildID := range guildsMap {
-		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw")
-		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw")
+		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw"); err != nil {
+			log.Printf("[Guild %s] Failed to update BOTW weekly leaderboard: %v", guildID, err)
+		}
+		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw"); err != nil {
+			log.Printf("[Guild %s] Failed to update SOTW weekly leaderboard: %v", guildID, err)
+		}
 	}
 }
 
@@ -125,7 +128,7 @@ func (s *Scheduler) processMissingAccountNotifications(ctx context.Context, now 
 		log.Printf("Failed to load pending missing account DMs: %v", err)
 	} else {
 		for _, pending := range pendingDMs {
-			if err := discord.SendAccountNotFoundDM(s.session, pending.DiscordUserID, pending.GuildID, pending.RSN); err != nil {
+			if err := s.notifier.SendAccountNotFoundDM(pending.DiscordUserID, pending.GuildID, pending.RSN); err != nil {
 				log.Printf("Failed to send missing account DM for account %d (%s): %v", pending.AccountID, pending.RSN, err)
 				continue
 			}

@@ -278,6 +278,14 @@ type SuccessfulAccountUpdate struct {
 	GuildID       string
 }
 
+func (s *SnapshotService) CountSnapshotsForEvent(ctx context.Context, eventID int64) (int, error) {
+	snapshots, err := s.store.GetSnapshotsWithAccounts(ctx, eventID)
+	if err != nil {
+		return 0, err
+	}
+	return len(snapshots), nil
+}
+
 func (s *SnapshotService) UpdateSnapshotsForEvent(ctx context.Context, event *database.Event) ([]FailedAccountUpdate, error) {
 	snapshots, err := s.store.GetSnapshotsByEvent(ctx, event.ID)
 	if err != nil {

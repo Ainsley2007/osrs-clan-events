@@ -50,6 +50,10 @@ func TestPurgeOrphanedEvents(t *testing.T) {
 		t.Fatalf("failed to create store: %v", err)
 	}
 	defer store.Close()
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		t.Fatal("expected *SQLiteStore from NewSQLiteStore")
+	}
 
 	guildID := "orphan-guild"
 	if err := store.SaveGuild(ctx, &Guild{GuildID: guildID}); err != nil {
@@ -65,13 +69,13 @@ func TestPurgeOrphanedEvents(t *testing.T) {
 	}
 
 	// Simulate partial cleanup from before FK was enforced on every connection.
-	if _, err := store.db.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+	if _, err := sqliteStore.db.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
 		t.Fatalf("disable foreign keys: %v", err)
 	}
-	if _, err := store.db.ExecContext(ctx, `DELETE FROM guilds WHERE guild_id = ?`, guildID); err != nil {
+	if _, err := sqliteStore.db.ExecContext(ctx, `DELETE FROM guilds WHERE guild_id = ?`, guildID); err != nil {
 		t.Fatalf("delete guild row only: %v", err)
 	}
-	if _, err := store.db.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+	if _, err := sqliteStore.db.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
 		t.Fatalf("re-enable foreign keys: %v", err)
 	}
 

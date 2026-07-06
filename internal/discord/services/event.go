@@ -204,6 +204,10 @@ func (s *EventService) GetActiveEvent(ctx context.Context, guildID, eventType st
 	return s.store.GetActiveEvent(ctx, guildID, eventType)
 }
 
+func (s *EventService) GetActiveEvents(ctx context.Context, guildID, eventType string) ([]*database.Event, error) {
+	return s.store.GetActiveEvents(ctx, guildID, eventType)
+}
+
 func (s *EventService) GetNextWeekNumber(ctx context.Context, guildID, eventType string) (int, error) {
 	events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, eventType)
 	if err != nil {
@@ -240,6 +244,27 @@ func (s *EventService) CompleteEventWithoutSnapshotUpdate(ctx context.Context, e
 	}
 
 	return nil
+}
+
+// AbortStartedEvent deactivates a freshly created event when a paired start fails.
+// It does not award points or update snapshots.
+func (s *EventService) AbortStartedEvent(ctx context.Context, event *database.Event) error {
+	if event == nil {
+		return nil
+	}
+	return s.store.DeactivateEvent(ctx, event.ID)
+}
+
+// AbortActiveEventIfPresent deactivates the guild's active event of the given type when present.
+func (s *EventService) AbortActiveEventIfPresent(ctx context.Context, guildID, eventType string) error {
+	event, err := s.GetActiveEvent(ctx, guildID, eventType)
+	if err != nil {
+		if errors.Is(err, database.ErrNoActiveEvent) {
+			return nil
+		}
+		return err
+	}
+	return s.AbortStartedEvent(ctx, event)
 }
 
 // StartNewEvent creates a new event after the old one has been completed (e.g. manual /start).
@@ -327,16 +352,14 @@ type metricPickRoll struct {
 	PickedIdx  int     // index into the candidate slice; -1 when not set
 }
 
-func weightedPickBoss(bosses []firebase.BossConfig, recentNames []string) *firebase.BossConfig {
+func weightedPickBoss(bosses []firebase.BossConfig, recentNames []string) (*firebase.BossConfig, metricPickRoll) {
 	weights, totalWeight := metricPickWeights(bosses, recentNames, func(b firebase.BossConfig) string { return b.Name })
-	picked, _ := weightedPickFromWeights(bosses, weights, totalWeight)
-	return picked
+	return weightedPickFromWeights(bosses, weights, totalWeight)
 }
 
-func weightedPickSkill(skills []firebase.SkillConfig, recentNames []string) *firebase.SkillConfig {
+func weightedPickSkill(skills []firebase.SkillConfig, recentNames []string) (*firebase.SkillConfig, metricPickRoll) {
 	weights, totalWeight := metricPickWeights(skills, recentNames, func(s firebase.SkillConfig) string { return s.Name })
-	picked, _ := weightedPickFromWeights(skills, weights, totalWeight)
-	return picked
+	return weightedPickFromWeights(skills, weights, totalWeight)
 }
 
 func metricPickWeights[T any](items []T, recentNames []string, nameOf func(T) string) ([]metricPickWeight, float64) {
@@ -354,6 +377,9 @@ func metricPickWeights[T any](items []T, recentNames []string, nameOf func(T) st
 }
 
 func weightedPickFromWeights[T any](items []T, weights []metricPickWeight, totalWeight float64) (*T, metricPickRoll) {
+	if len(items) == 0 {
+		return nil, metricPickRoll{}
+	}
 	if totalWeight <= 0 {
 		i := rand.Intn(len(items))
 		return &items[i], metricPickRoll{UniformIdx: i, PickedIdx: i}

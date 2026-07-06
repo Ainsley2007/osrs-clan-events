@@ -9,6 +9,7 @@ Subdirectories are created as learnings accrue — e.g. `conventions/`, `archite
 ## Current learnings
 
 - [conventions/add-pb-category-boss.md](conventions/add-pb-category-boss.md) — add a boss to PB category seeds
+- [architecture-patterns/go-package-structure-cleanup.md](architecture-patterns/go-package-structure-cleanup.md) — bot layering, exports, scheduler decoupling
 
 ## Workflow
 

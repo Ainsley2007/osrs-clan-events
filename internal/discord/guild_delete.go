@@ -20,7 +20,7 @@ func (b *Bot) guildDelete(s *discordgo.Session, gd *discordgo.GuildDelete) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := b.Store.DeleteGuild(ctx, gd.Guild.ID); err != nil {
+	if err := b.guildService.DeleteGuild(ctx, gd.Guild.ID); err != nil {
 		log.Printf("Failed to clean up guild %s: %v", gd.Guild.ID, err)
 		return
 	}

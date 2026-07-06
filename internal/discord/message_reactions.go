@@ -31,22 +31,22 @@ func (b *Bot) messageReactionAdd(s *discordgo.Session, event *discordgo.MessageR
 	userID := event.UserID
 
 	if emoji == services.PBRejectEmoji {
-		go b.runPBRejectionFollowUp(s, guildID, channelID, messageID, userID)
+		goSafe("pb-reject", func() { b.runPBRejectionFollowUp(s, guildID, channelID, messageID, userID) })
 		return
 	}
 
-	go b.runPBApprovalFollowUp(guildID, channelID, messageID, userID)
+	goSafe("pb-approve", func() { b.runPBApprovalFollowUp(guildID, channelID, messageID, userID) })
 }
 
 func (b *Bot) runPBApprovalFollowUp(guildID, channelID, messageID, userID string) {
 	ctx, cancel := cmdContext()
 	defer cancel()
 
-	if _, ok := b.PBService.PendingProofSubmissionForReaction(ctx, guildID, channelID, messageID); !ok {
+	if _, ok := b.pbService.PendingProofSubmissionForReaction(ctx, guildID, channelID, messageID); !ok {
 		return
 	}
 
-	result, err := b.PBService.HandleApproval(ctx, guildID, messageID, userID)
+	result, err := b.pbService.HandleApproval(ctx, guildID, messageID, userID)
 	if err != nil {
 		if services.IsPBSubmissionAlreadyReviewed(err) {
 			return
@@ -55,18 +55,18 @@ func (b *Bot) runPBApprovalFollowUp(guildID, channelID, messageID, userID string
 		return
 	}
 
-	b.PBService.RunApprovalFollowUp(channelID, result, userID, time.Now().UTC())
+	b.pbService.RunApprovalFollowUp(channelID, result, userID, time.Now().UTC())
 }
 
 func (b *Bot) runPBRejectionFollowUp(s *discordgo.Session, guildID, channelID, messageID, userID string) {
 	ctx, cancel := cmdContext()
 	defer cancel()
 
-	if _, ok := b.PBService.PendingProofSubmissionForReaction(ctx, guildID, channelID, messageID); !ok {
+	if _, ok := b.pbService.PendingProofSubmissionForReaction(ctx, guildID, channelID, messageID); !ok {
 		return
 	}
 
-	submission, err := b.PBService.HandleRejection(ctx, guildID, messageID, userID)
+	submission, err := b.pbService.HandleRejection(ctx, guildID, messageID, userID)
 	if err != nil {
 		if services.IsPBSubmissionAlreadyReviewed(err) {
 			return

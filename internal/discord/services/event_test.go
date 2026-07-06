@@ -121,6 +121,37 @@ func errNoActiveEvent() error {
 	return database.ErrNoActiveEvent
 }
 
+func TestAbortStartedEvent_DeactivatesEvent(t *testing.T) {
+	var deactivatedID int64
+	store := &fakeEventStore{
+		deactivateEventFn: func(_ context.Context, eventID int64) error {
+			deactivatedID = eventID
+			return nil
+		},
+	}
+	svc := NewEventService(store, nil, nil, nil)
+
+	err := svc.AbortStartedEvent(context.Background(), &database.Event{ID: 42})
+	if err != nil {
+		t.Fatalf("AbortStartedEvent: %v", err)
+	}
+	if deactivatedID != 42 {
+		t.Fatalf("expected event 42 deactivated, got %d", deactivatedID)
+	}
+}
+
+func TestAbortActiveEventIfPresent_NoActiveEvent(t *testing.T) {
+	store := &fakeEventStore{
+		getActiveEventFn: func(context.Context, string, string) (*database.Event, error) {
+			return nil, database.ErrNoActiveEvent
+		},
+	}
+	svc := NewEventService(store, nil, nil, nil)
+	if err := svc.AbortActiveEventIfPresent(context.Background(), "guild1", "botw"); err != nil {
+		t.Fatalf("AbortActiveEventIfPresent: %v", err)
+	}
+}
+
 func TestPrepareAndCommitRolloverEvent(t *testing.T) {
 	ctx := context.Background()
 	startTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
@@ -196,6 +227,16 @@ func TestCountOccurrences(t *testing.T) {
 	}
 }
 
+func TestWeightedPickFromWeights_EmptyItems(t *testing.T) {
+	picked, roll := weightedPickFromWeights([]firebase.BossConfig{}, nil, 0)
+	if picked != nil {
+		t.Fatalf("expected nil pick for empty items, got %v", picked)
+	}
+	if roll != (metricPickRoll{}) {
+		t.Fatalf("expected zero roll for empty items, got %+v", roll)
+	}
+}
+
 func TestWeightedPickBoss(t *testing.T) {
 	bosses := []firebase.BossConfig{
 		{Name: "Vorkath"},
@@ -204,7 +245,7 @@ func TestWeightedPickBoss(t *testing.T) {
 	}
 
 	t.Run("no recent history gives uniform chance", func(t *testing.T) {
-		got := weightedPickBoss(bosses, nil)
+		got, _ := weightedPickBoss(bosses, nil)
 		if got == nil {
 			t.Fatal("expected non-nil")
 		}
@@ -217,7 +258,7 @@ func TestWeightedPickBoss(t *testing.T) {
 		recent := []string{"Vorkath", "Vorkath", "Zulrah"}
 		seen := make(map[string]int)
 		for i := 0; i < 200; i++ {
-			b := weightedPickBoss(bosses, recent)
+			b, _ := weightedPickBoss(bosses, recent)
 			seen[b.Name]++
 		}
 		if seen["Nightmare"] < 50 {
@@ -230,7 +271,7 @@ func TestWeightedPickBoss(t *testing.T) {
 
 	t.Run("single item returns it", func(t *testing.T) {
 		one := []firebase.BossConfig{{Name: "Only"}}
-		got := weightedPickBoss(one, []string{"Only", "Only"})
+		got, _ := weightedPickBoss(one, []string{"Only", "Only"})
 		if got == nil || got.Name != "Only" {
 			t.Errorf("expected Only, got %v", got)
 		}

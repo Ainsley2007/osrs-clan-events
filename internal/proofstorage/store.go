@@ -13,11 +13,11 @@ type Store interface {
 	DeleteBySubmissionID(ctx context.Context, submissionID int64) error
 }
 
-func ObjectKey(submissionID int64, ext string) string {
+func objectKey(submissionID int64, ext string) string {
 	return fmt.Sprintf("%d%s", submissionID, ext)
 }
 
-func PublicURL(baseURL, key string) string {
+func buildPublicURL(baseURL, key string) string {
 	if baseURL == "" {
 		return key
 	}

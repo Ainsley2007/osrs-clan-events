@@ -104,7 +104,7 @@ func (m *mockHourlyStore) GetUnresolvedMissingAccountNotificationsByGuild(_ cont
 
 func TestProcessMissingAccountNotifications_SendsDMOnlyOncePerUnresolvedState(t *testing.T) {
 	store := newMockHourlyStore()
-	s := &Scheduler{store: store}
+	s := &Scheduler{store: store, notifier: noopNotifier{}}
 	now := time.Now().UTC()
 	result := &services.UpdateSnapshotsForEventsResult{
 		FailedUpdates: []services.FailedAccountUpdate{
@@ -128,7 +128,7 @@ func TestProcessMissingAccountNotifications_SendsDMOnlyOncePerUnresolvedState(t 
 
 func TestProcessMissingAccountNotifications_ResolvesAfterSuccessfulFetch(t *testing.T) {
 	store := newMockHourlyStore()
-	s := &Scheduler{store: store}
+	s := &Scheduler{store: store, notifier: noopNotifier{}}
 	now := time.Now().UTC()
 
 	s.processMissingAccountNotifications(context.Background(), now, &services.UpdateSnapshotsForEventsResult{

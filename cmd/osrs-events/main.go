@@ -16,7 +16,6 @@ import (
 	"osrs-events/internal/logging"
 	"osrs-events/internal/osrs"
 	"osrs-events/internal/proofstorage"
-	"osrs-events/internal/scheduler"
 )
 
 func main() {
@@ -39,11 +38,7 @@ func main() {
 	log.SetOutput(appLog.StdWriter())
 
 	// ─── Database ─────────────────────────────────────────────────
-	dbPath := os.Getenv("DATABASE_PATH")
-	if dbPath == "" {
-		dbPath = "osrs_events.db"
-	}
-	db, err := database.NewSQLiteStore(dbPath)
+	db, err := database.NewSQLiteStore(cfg.DatabasePath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -93,7 +88,7 @@ func main() {
 	}
 
 	// ─── Scheduler (rollover, hourly snapshots, pending starts) ───
-	sched := scheduler.New(db, bot.EventService, bot.SnapshotService, bot.LeaderboardService, bot.InitializerService, bot.Session)
+	sched := bot.Scheduler(db)
 	sched.Start()
 	defer sched.Stop()
 	log.Println("Scheduler started successfully")

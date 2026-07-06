@@ -60,6 +60,10 @@ func NewPBService(store PBStore, proofStore proofstorage.Store, session *discord
 	return s
 }
 
+func (s *PBService) GetActivePBCategories(ctx context.Context) ([]*database.PBCategory, error) {
+	return s.store.GetActivePBCategories(ctx)
+}
+
 func IsPBSubmissionAlreadyReviewed(err error) bool {
 	return errors.Is(err, database.ErrPBSubmissionNotPending)
 }
@@ -157,7 +161,7 @@ func (s *PBService) SubmitPB(ctx context.Context, input *PBSubmissionInput) (*da
 	if err != nil {
 		return nil, nil, err
 	}
-	leaderboardDisplayName := FormatLeaderboardDisplayName(input.DisplayName, teammateNames)
+	leaderboardDisplayName := formatLeaderboardDisplayName(input.DisplayName, teammateNames)
 
 	now := time.Now().UTC()
 	submission := &database.PBSubmission{
@@ -647,7 +651,7 @@ type pbLeaderboardRow struct {
 	place  int
 }
 
-func RankPBLeaderboardPlaceRows(records []*database.PBRecord) []pbLeaderboardRow {
+func rankPBLeaderboardPlaceRows(records []*database.PBRecord) []pbLeaderboardRow {
 	if len(records) == 0 {
 		return nil
 	}
@@ -735,7 +739,7 @@ func writeLeaderboardEmbedDescription(b *strings.Builder, rows []pbLeaderboardRo
 
 func (s *PBService) buildLeaderboardEmbed(category *database.PBCategory, records []*database.PBRecord) *discordgo.MessageEmbed {
 	now := time.Now().UTC()
-	rows := RankPBLeaderboardPlaceRows(records)
+	rows := rankPBLeaderboardPlaceRows(records)
 
 	var description strings.Builder
 	writeLeaderboardEmbedDescription(&description, rows)

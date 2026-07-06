@@ -49,15 +49,17 @@ func (b *Bot) addAccountCommand() Command {
 				return
 			}
 
+			actorID, _ := interactionActorID(i)
+
 			if err := respondDeferred(s, i.Interaction, "⏳ Adding account..."); err != nil {
 				log.Printf("Failed to defer add interaction: %v", err)
 				return
 			}
 
-		go func() {
-			ctx, cancel := cmdContext()
-			defer cancel()
-			result, err := b.AccountService.AddAccount(ctx, targetUser, i.GuildID, rsn)
+			goSafe("add-account", func() {
+				ctx, cancel := cmdContext()
+				defer cancel()
+				result, err := b.accountService.AddAccount(ctx, targetUser, i.GuildID, rsn)
 				if err != nil {
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to add account: %v", err))
 					return
@@ -65,7 +67,7 @@ func (b *Bot) addAccountCommand() Command {
 
 				if isOtherUser {
 					user, _ := s.User(targetUser)
-					b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s` for <@%s>", i.Member.User.ID, rsn, user.ID))
+					b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s` for <@%s>", actorID, rsn, user.ID))
 				} else {
 					b.logAction(ctx, i.GuildID, fmt.Sprintf("➕ <@%s> added account `%s`", targetUser, rsn))
 				}
@@ -83,7 +85,7 @@ func (b *Bot) addAccountCommand() Command {
 						editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Added RSN `%s`.", rsn))
 					}
 				}
-			}()
+			})
 		},
 	}
 }

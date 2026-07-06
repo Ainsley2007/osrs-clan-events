@@ -8,7 +8,7 @@ import (
 )
 
 func (b *Bot) logAction(ctx context.Context, guildID, message string) {
-	guild, err := b.GuildService.GetOrCreateGuild(ctx, guildID)
+	guild, err := b.guildService.GetOrCreateGuild(ctx, guildID)
 	if err != nil || guild.LogChannelID == "" {
 		return
 	}
@@ -19,7 +19,7 @@ func (b *Bot) logAction(ctx context.Context, guildID, message string) {
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}
 
-	b.Session.ChannelMessageSendEmbed(guild.LogChannelID, embed)
+	b.session.ChannelMessageSendEmbed(guild.LogChannelID, embed)
 }
 
 func logAction(s *discordgo.Session, channelID, title, description string, color int) {

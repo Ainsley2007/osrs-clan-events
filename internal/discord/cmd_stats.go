@@ -31,17 +31,21 @@ func (b *Bot) handleStats(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		return
 	}
 
-	go b.runStatsAndEditReply(s, i)
+	goSafe("stats", func() { b.runStatsAndEditReply(s, i) })
 }
 
 func (b *Bot) runStatsAndEditReply(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	userID := i.Member.User.ID
+	userID, ok := interactionActorID(i)
+	if !ok {
+		editDeferredWithError(s, i.Interaction, fmt.Errorf("could not resolve command user"))
+		return
+	}
 	guildID := i.GuildID
 
-	botwStats, sotwStats, err := b.StatsService.GetUserEventStats(ctx, userID, guildID)
+	botwStats, sotwStats, err := b.statsService.GetUserEventStats(ctx, userID, guildID)
 	if err != nil {
 		editDeferredWithError(s, i.Interaction, err)
 		return
