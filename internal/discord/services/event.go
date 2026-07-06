@@ -323,6 +323,7 @@ type metricPickWeight struct {
 type metricPickRoll struct {
 	Value      float64 // random value in [0, totalWeight); -1 when uniform fallback was used
 	UniformIdx int     // index from rand.Intn when uniform fallback was used; -1 otherwise
+	PickedIdx  int     // index into the candidate slice; -1 when not set
 }
 
 func weightedPickBoss(bosses []firebase.BossConfig, recentNames []string) *firebase.BossConfig {
@@ -354,17 +355,18 @@ func metricPickWeights[T any](items []T, recentNames []string, nameOf func(T) st
 func weightedPickFromWeights[T any](items []T, weights []metricPickWeight, totalWeight float64) (*T, metricPickRoll) {
 	if totalWeight <= 0 {
 		i := rand.Intn(len(items))
-		return &items[i], metricPickRoll{UniformIdx: i}
+		return &items[i], metricPickRoll{UniformIdx: i, PickedIdx: i}
 	}
 	roll := rand.Float64() * totalWeight
 	r := roll
 	for i, w := range weights {
 		r -= w.Weight
 		if r <= 0 {
-			return &items[i], metricPickRoll{Value: roll}
+			return &items[i], metricPickRoll{Value: roll, UniformIdx: -1, PickedIdx: i}
 		}
 	}
-	return &items[len(items)-1], metricPickRoll{Value: roll}
+	last := len(items) - 1
+	return &items[last], metricPickRoll{Value: roll, UniformIdx: -1, PickedIdx: last}
 }
 
 func (s *EventService) logMetricSelection(guildID, eventType, selected string, weekNumber, candidateCount int, weights []metricPickWeight, totalWeight float64, recentNames []string, roll metricPickRoll) {
@@ -378,24 +380,33 @@ func (s *EventService) logMetricSelection(guildID, eventType, selected string, w
 		s.logger.Printf("[Guild %s] %s selection: recent history counts: %s",
 			guildID, label, formatOccurrenceCounts(countOccurrences(recentNames)))
 	}
-	s.logger.Printf("[Guild %s] %s selection: weights (total=%.3f): %s",
+	s.logger.Printf("[Guild %s] %s selection: weights (total=%.6f): %s",
 		guildID, label, totalWeight, formatPickWeights(weights))
-	if roll.UniformIdx >= 0 {
-		s.logger.Printf("[Guild %s] %s selection: uniform roll index %d of %d (no weight total)",
-			guildID, label, roll.UniformIdx, candidateCount)
-	} else {
-		s.logger.Printf("[Guild %s] %s selection: roll=%.3f of %.3f",
-			guildID, label, roll.Value, totalWeight)
-	}
-	s.logger.Printf("[Guild %s] %s selection: picked %q for week %d", guildID, label, selected, weekNumber)
+	s.logger.Printf("[Guild %s] %s selection: roll %s (week %d)",
+		guildID, label, formatMetricRoll(roll, totalWeight, weights, selected), weekNumber)
 }
 
 func formatPickWeights(weights []metricPickWeight) string {
 	parts := make([]string, len(weights))
 	for i, w := range weights {
-		parts[i] = fmt.Sprintf("%s(recent=%d, weight=%.3f)", w.Name, w.Count, w.Weight)
+		parts[i] = fmt.Sprintf("%s(recent=%d, weight=%.6f)", w.Name, w.Count, w.Weight)
 	}
 	return strings.Join(parts, ", ")
+}
+
+func formatMetricRoll(roll metricPickRoll, totalWeight float64, weights []metricPickWeight, selected string) string {
+	if roll.UniformIdx >= 0 {
+		return fmt.Sprintf("uniform index %d (zero total weight) -> %q", roll.UniformIdx, selected)
+	}
+	var low float64
+	for i, w := range weights {
+		high := low + w.Weight
+		if i == roll.PickedIdx {
+			return fmt.Sprintf("%.6f in [%.6f, %.6f) -> %q", roll.Value, low, high, selected)
+		}
+		low = high
+	}
+	return fmt.Sprintf("%.6f of %.6f -> %q", roll.Value, totalWeight, selected)
 }
 
 func formatOccurrenceCounts(counts map[string]int) string {

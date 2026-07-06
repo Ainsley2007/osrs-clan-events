@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -234,4 +235,47 @@ func TestWeightedPickBoss(t *testing.T) {
 			t.Errorf("expected Only, got %v", got)
 		}
 	})
+}
+
+func TestFormatMetricRoll(t *testing.T) {
+	weights := []metricPickWeight{
+		{Name: "Crafting", Count: 1, Weight: 0.5},
+		{Name: "Smithing", Count: 0, Weight: 1.0},
+		{Name: "Mining", Count: 0, Weight: 1.0},
+	}
+
+	got := formatMetricRoll(metricPickRoll{Value: 0.25, UniformIdx: -1, PickedIdx: 0}, 2.5, weights, "Crafting")
+	want := `0.250000 in [0.000000, 0.500000) -> "Crafting"`
+	if got != want {
+		t.Fatalf("formatMetricRoll() = %q, want %q", got, want)
+	}
+
+	got = formatMetricRoll(metricPickRoll{Value: 1.75, UniformIdx: -1, PickedIdx: 2}, 2.5, weights, "Mining")
+	want = `1.750000 in [1.500000, 2.500000) -> "Mining"`
+	if got != want {
+		t.Fatalf("formatMetricRoll() = %q, want %q", got, want)
+	}
+
+	got = formatMetricRoll(metricPickRoll{UniformIdx: 1, PickedIdx: 1}, 0, weights, "Smithing")
+	if !strings.Contains(got, `uniform index 1`) || !strings.Contains(got, `"Smithing"`) {
+		t.Fatalf("formatMetricRoll() uniform = %q", got)
+	}
+}
+
+func TestWeightedPickFromWeightsSetsPickedIdx(t *testing.T) {
+	bosses := []firebase.BossConfig{{Name: "A"}, {Name: "B"}, {Name: "C"}}
+	weights := []metricPickWeight{
+		{Name: "A", Weight: 1},
+		{Name: "B", Weight: 1},
+		{Name: "C", Weight: 1},
+	}
+	for i := 0; i < 100; i++ {
+		picked, roll := weightedPickFromWeights(bosses, weights, 3)
+		if roll.PickedIdx < 0 || roll.PickedIdx >= len(bosses) {
+			t.Fatalf("picked idx out of range: %d", roll.PickedIdx)
+		}
+		if picked.Name != bosses[roll.PickedIdx].Name {
+			t.Fatalf("picked name %q does not match idx %d", picked.Name, roll.PickedIdx)
+		}
+	}
 }
