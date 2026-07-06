@@ -15,15 +15,15 @@ func (b *Bot) guildDelete(s *discordgo.Session, gd *discordgo.GuildDelete) {
 		return
 	}
 
-	log.Printf("🚪 Bot removed from guild: %s (ID: %s)", gd.Guild.Name, gd.Guild.ID)
+	log.Printf("Bot removed from guild: %s (ID: %s)", gd.Guild.Name, gd.Guild.ID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := b.Store.DeleteGuild(ctx, gd.Guild.ID); err != nil {
-		log.Printf("❌ Failed to clean up guild %s: %v", gd.Guild.ID, err)
+		log.Printf("Failed to clean up guild %s: %v", gd.Guild.ID, err)
 		return
 	}
 
-	log.Printf("✅ Successfully cleaned up all data for guild %s", gd.Guild.ID)
+	log.Printf("Successfully cleaned up all data for guild %s", gd.Guild.ID)
 }

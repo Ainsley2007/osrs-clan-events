@@ -237,6 +237,33 @@ func TestWeightedPickBoss(t *testing.T) {
 	})
 }
 
+func TestFormatMetricSelectionLog(t *testing.T) {
+	weights := []metricPickWeight{
+		{Name: "Crafting", Count: 1, Weight: 0.5},
+		{Name: "Smithing", Count: 0, Weight: 1.0},
+		{Name: "Mining", Count: 0, Weight: 1.0},
+	}
+	roll := metricPickRoll{Value: 0.25, UniformIdx: -1, PickedIdx: 0}
+
+	got := formatMetricSelectionLog("guild1", "sotw", "Crafting", 23, 3, weights, 2.5,
+		[]string{"Crafting", "Mining"}, roll)
+
+	for _, want := range []string{
+		"[Guild guild1] SOTW selection",
+		"  pool:    3 candidates | 2 events in 52-week window",
+		"  recent:",
+		"    crafting ×1",
+		"    mining ×1",
+		"  weights (total 2.500000):",
+		"    [ 0] Crafting                 recent=1  weight=0.500000  range=[0.000000, 0.500000)  <- picked",
+		"  roll: 0.250000 in [0.000000, 0.500000) -> \"Crafting\" (week 23)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("formatMetricSelectionLog() missing %q\n\ngot:\n%s", want, got)
+		}
+	}
+}
+
 func TestFormatMetricRoll(t *testing.T) {
 	weights := []metricPickWeight{
 		{Name: "Crafting", Count: 1, Weight: 0.5},

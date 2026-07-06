@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"slices"
 	"strings"
 	"time"
 
@@ -373,25 +374,57 @@ func (s *EventService) logMetricSelection(guildID, eventType, selected string, w
 	if s.logger == nil {
 		return
 	}
-	label := strings.ToUpper(eventType)
-	s.logger.Printf("[Guild %s] %s selection: remote config has %d candidates, %d recent events in %d-week window",
-		guildID, label, candidateCount, len(recentNames), recentEventsWeightWindow)
-	if len(recentNames) > 0 {
-		s.logger.Printf("[Guild %s] %s selection: recent history counts: %s",
-			guildID, label, formatOccurrenceCounts(countOccurrences(recentNames)))
-	}
-	s.logger.Printf("[Guild %s] %s selection: weights (total=%.6f): %s",
-		guildID, label, totalWeight, formatPickWeights(weights))
-	s.logger.Printf("[Guild %s] %s selection: roll %s (week %d)",
-		guildID, label, formatMetricRoll(roll, totalWeight, weights, selected), weekNumber)
+	s.logger.Printf("%s", formatMetricSelectionLog(guildID, eventType, selected, weekNumber, candidateCount, weights, totalWeight, recentNames, roll))
 }
 
-func formatPickWeights(weights []metricPickWeight) string {
-	parts := make([]string, len(weights))
-	for i, w := range weights {
-		parts[i] = fmt.Sprintf("%s(recent=%d, weight=%.6f)", w.Name, w.Count, w.Weight)
+func formatMetricSelectionLog(guildID, eventType, selected string, weekNumber, candidateCount int, weights []metricPickWeight, totalWeight float64, recentNames []string, roll metricPickRoll) string {
+	label := strings.ToUpper(eventType)
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "[Guild %s] %s selection\n", guildID, label)
+	fmt.Fprintf(&b, "  pool:    %d candidates | %d events in %d-week window\n",
+		candidateCount, len(recentNames), recentEventsWeightWindow)
+
+	counts := countOccurrences(recentNames)
+	if len(counts) > 0 {
+		b.WriteString("  recent:\n")
+		for _, line := range formatSortedOccurrenceLines(counts) {
+			fmt.Fprintf(&b, "    %s\n", line)
+		}
 	}
-	return strings.Join(parts, ", ")
+
+	fmt.Fprintf(&b, "  weights (total %.6f):\n", totalWeight)
+	var low float64
+	pickedIdx := roll.PickedIdx
+	if roll.UniformIdx >= 0 {
+		pickedIdx = roll.UniformIdx
+	}
+	for i, w := range weights {
+		high := low + w.Weight
+		marker := ""
+		if i == pickedIdx {
+			marker = "  <- picked"
+		}
+		fmt.Fprintf(&b, "    [%2d] %-24s recent=%d  weight=%8.6f  range=[%8.6f, %8.6f)%s\n",
+			i, w.Name, w.Count, w.Weight, low, high, marker)
+		low = high
+	}
+
+	fmt.Fprintf(&b, "  roll: %s (week %d)", formatMetricRoll(roll, totalWeight, weights, selected), weekNumber)
+	return b.String()
+}
+
+func formatSortedOccurrenceLines(counts map[string]int) []string {
+	names := make([]string, 0, len(counts))
+	for name := range counts {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	lines := make([]string, len(names))
+	for i, name := range names {
+		lines[i] = fmt.Sprintf("%s ×%d", name, counts[name])
+	}
+	return lines
 }
 
 func formatMetricRoll(roll metricPickRoll, totalWeight float64, weights []metricPickWeight, selected string) string {
@@ -413,9 +446,5 @@ func formatOccurrenceCounts(counts map[string]int) string {
 	if len(counts) == 0 {
 		return "none"
 	}
-	parts := make([]string, 0, len(counts))
-	for name, count := range counts {
-		parts = append(parts, fmt.Sprintf("%s×%d", name, count))
-	}
-	return strings.Join(parts, ", ")
+	return strings.Join(formatSortedOccurrenceLines(counts), ", ")
 }

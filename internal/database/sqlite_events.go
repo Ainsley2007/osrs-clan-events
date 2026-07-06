@@ -33,7 +33,7 @@ func (s *SQLiteStore) GetActiveEvent(ctx context.Context, guildID string, eventT
 
 func (s *SQLiteStore) logDuplicateActiveEventsIfNeeded(events []*Event, eventType, guildID string) {
 	if len(events) > 1 {
-		log.Printf("⚠️  WARNING: Found %d active %s events for guild %s (should be impossible with unique index). Returning newest.", len(events), eventType, guildID)
+		log.Printf("WARNING: Found %d active %s events for guild %s (should be impossible with unique index). Returning newest.", len(events), eventType, guildID)
 	}
 }
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -14,11 +13,10 @@ import (
 	"osrs-events/internal/database"
 	"osrs-events/internal/discord"
 	"osrs-events/internal/firebase"
+	"osrs-events/internal/logging"
 	"osrs-events/internal/osrs"
 	"osrs-events/internal/proofstorage"
 	"osrs-events/internal/scheduler"
-
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func main() {
@@ -28,21 +26,17 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// ─── Logging (stdout + rotating file for persistence) ─────────
+	// ─── Logging (colored stdout + plain rotating file) ───────────
 	logPath := os.Getenv("LOG_FILE")
 	if logPath == "" {
 		logPath = "logs/app.log"
 	}
 	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
 		log.Printf("Warning: could not create log directory: %v", err)
-	} else {
-		log.SetOutput(io.MultiWriter(os.Stdout, &lumberjack.Logger{
-			Filename:   logPath,
-			MaxSize:    50, // MB
-			MaxAge:     24, // hours
-			MaxBackups: 2,
-		}))
 	}
+	appLog := logging.New(logPath)
+	log.SetFlags(0)
+	log.SetOutput(appLog.StdWriter())
 
 	// ─── Database ─────────────────────────────────────────────────
 	dbPath := os.Getenv("DATABASE_PATH")
@@ -83,7 +77,7 @@ func main() {
 	log.Println("R2 proof storage initialized successfully")
 
 	// ─── Discord bot ──────────────────────────────────────────────
-	bot, err := discord.New(cfg.DiscordToken, db, osrsClient, remoteConfigClient, r2Store)
+	bot, err := discord.New(cfg.DiscordToken, db, osrsClient, remoteConfigClient, r2Store, appLog)
 	if err != nil {
 		log.Fatalf("Failed to create Discord bot: %v", err)
 	}

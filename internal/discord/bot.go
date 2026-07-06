@@ -30,16 +30,18 @@ type Bot struct {
 
 	mu             sync.Mutex
 	initInProgress map[string]bool
-	logger         *log.Logger
+	logger         services.Logger
 }
 
-func New(token string, store database.Store, osrsClient *osrs.Client, firebaseClient *firebase.RemoteConfigClient, proofStore proofstorage.Store) (*Bot, error) {
+func New(token string, store database.Store, osrsClient *osrs.Client, firebaseClient *firebase.RemoteConfigClient, proofStore proofstorage.Store, logger services.Logger) (*Bot, error) {
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return nil, err
 	}
 
-	logger := log.Default()
+	if logger == nil {
+		logger = log.Default()
+	}
 	snapshotService := services.NewSnapshotService(store, osrsClient, logger)
 	eventService := services.NewEventService(store, snapshotService, firebaseClient, logger)
 	leaderboardService := services.NewLeaderboardService(store, dg, logger)
