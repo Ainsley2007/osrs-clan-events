@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -61,47 +60,7 @@ func (b *Bot) runStatsAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 
 	var embeds []*discordgo.MessageEmbed
 
-	if len(botwStats) > 0 {
-		for _, eventStat := range botwStats {
-			var description strings.Builder
-			description.WriteString("```\n")
-			for _, accountStat := range eventStat.AccountStats {
-				description.WriteString(fmt.Sprintf("%-20s %10s KC\n", accountStat.RSN, formatNumber(accountStat.Gain)))
-			}
-			description.WriteString("```")
-
-			embed := &discordgo.MessageEmbed{
-				Title:       fmt.Sprintf("🗡️ BOTW - %s (Week %d)", eventStat.MetricName, eventStat.WeekNumber),
-				Description: description.String(),
-				Color:       0xFF6B6B, // Red
-				Footer: &discordgo.MessageEmbedFooter{
-					Text: fmt.Sprintf("Points: %d", eventStat.Points),
-				},
-			}
-			embeds = append(embeds, embed)
-		}
-	}
-
-	if len(sotwStats) > 0 {
-		for _, eventStat := range sotwStats {
-			var description strings.Builder
-			description.WriteString("```\n")
-			for _, accountStat := range eventStat.AccountStats {
-				description.WriteString(fmt.Sprintf("%-20s %10s XP\n", accountStat.RSN, formatNumber(accountStat.Gain)))
-			}
-			description.WriteString("```")
-
-			embed := &discordgo.MessageEmbed{
-				Title:       fmt.Sprintf("⚔️ SOTW - %s (Week %d)", eventStat.MetricName, eventStat.WeekNumber),
-				Description: description.String(),
-				Color:       0x4ECDC4, // Teal
-				Footer: &discordgo.MessageEmbedFooter{
-					Text: fmt.Sprintf("Points: %d", eventStat.Points),
-				},
-			}
-			embeds = append(embeds, embed)
-		}
-	}
+	embeds = buildStatsEmbeds(botwStats, sotwStats)
 
 	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds: &embeds,
