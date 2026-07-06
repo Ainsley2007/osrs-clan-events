@@ -44,21 +44,21 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 	ctx, cancel := cmdContext()
 	defer cancel()
 
-	botwRunning, err := b.eventService.IsEventRunning(ctx, i.GuildID, "botw")
+	activeBotwEvents, err := b.eventService.GetActiveEvents(ctx, i.GuildID, "botw")
 	if err != nil {
 		editDeferredWithError(s, i.Interaction, fmt.Errorf("failed to check BOTW status: %w", err))
 		return
 	}
-	if botwRunning {
+	if len(activeBotwEvents) > 0 {
 		editDeferredWithError(s, i.Interaction, errors.New("⏰ BOTW competition is already running! Use /stop first"))
 		return
 	}
-	sotwRunning, err := b.eventService.IsEventRunning(ctx, i.GuildID, "sotw")
+	activeSotwEvents, err := b.eventService.GetActiveEvents(ctx, i.GuildID, "sotw")
 	if err != nil {
 		editDeferredWithError(s, i.Interaction, fmt.Errorf("failed to check SOTW status: %w", err))
 		return
 	}
-	if sotwRunning {
+	if len(activeSotwEvents) > 0 {
 		editDeferredWithError(s, i.Interaction, errors.New("⏰ SOTW competition is already running! Use /stop first"))
 		return
 	}
@@ -75,6 +75,9 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 	if err != nil {
 		if abortErr := b.eventService.AbortStartedEvent(ctx, botwResult.Event); abortErr != nil {
 			log.Printf("Failed to roll back BOTW after SOTW start failed: %v", abortErr)
+		}
+		if abortErr := b.eventService.AbortActiveEventIfPresent(ctx, i.GuildID, "sotw"); abortErr != nil {
+			log.Printf("Failed to roll back partial SOTW after start failed: %v", abortErr)
 		}
 		editDeferredWithError(s, i.Interaction, fmt.Errorf("failed to start SOTW: %w", err))
 		return

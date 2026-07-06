@@ -140,6 +140,18 @@ func TestAbortStartedEvent_DeactivatesEvent(t *testing.T) {
 	}
 }
 
+func TestAbortActiveEventIfPresent_NoActiveEvent(t *testing.T) {
+	store := &fakeEventStore{
+		getActiveEventFn: func(context.Context, string, string) (*database.Event, error) {
+			return nil, database.ErrNoActiveEvent
+		},
+	}
+	svc := NewEventService(store, nil, nil, nil)
+	if err := svc.AbortActiveEventIfPresent(context.Background(), "guild1", "botw"); err != nil {
+		t.Fatalf("AbortActiveEventIfPresent: %v", err)
+	}
+}
+
 func TestPrepareAndCommitRolloverEvent(t *testing.T) {
 	ctx := context.Background()
 	startTime := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)

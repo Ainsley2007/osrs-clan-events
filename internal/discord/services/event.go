@@ -255,6 +255,18 @@ func (s *EventService) AbortStartedEvent(ctx context.Context, event *database.Ev
 	return s.store.DeactivateEvent(ctx, event.ID)
 }
 
+// AbortActiveEventIfPresent deactivates the guild's active event of the given type when present.
+func (s *EventService) AbortActiveEventIfPresent(ctx context.Context, guildID, eventType string) error {
+	event, err := s.GetActiveEvent(ctx, guildID, eventType)
+	if err != nil {
+		if errors.Is(err, database.ErrNoActiveEvent) {
+			return nil
+		}
+		return err
+	}
+	return s.AbortStartedEvent(ctx, event)
+}
+
 // StartNewEvent creates a new event after the old one has been completed (e.g. manual /start).
 // Uses the API to create initial snapshots.
 func (s *EventService) StartNewEvent(ctx context.Context, guildID string, eventType string, startTime time.Time) (*StartEventResult, error) {
