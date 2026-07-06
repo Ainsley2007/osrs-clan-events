@@ -39,11 +39,7 @@ func main() {
 	log.SetOutput(appLog.StdWriter())
 
 	// ─── Database ─────────────────────────────────────────────────
-	dbPath := os.Getenv("DATABASE_PATH")
-	if dbPath == "" {
-		dbPath = "osrs_events.db"
-	}
-	db, err := database.NewSQLiteStore(dbPath)
+	db, err := database.NewSQLiteStore(cfg.DatabasePath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}

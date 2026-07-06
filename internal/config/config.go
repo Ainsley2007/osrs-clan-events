@@ -10,7 +10,7 @@ import (
 
 type Config struct {
 	DiscordToken                 string
-	DatabaseURL                  string
+	DatabasePath                 string
 	GoogleApplicationCredentials string
 	R2                           proofstorage.R2Config
 }
@@ -20,7 +20,7 @@ func Load() (*Config, error) {
 
 	return &Config{
 		DiscordToken:                 os.Getenv("DISCORD_TOKEN"),
-		DatabaseURL:                  os.Getenv("DATABASE_URL"),
+		DatabasePath:                 envOrDefault("DATABASE_PATH", "osrs_events.db"),
 		GoogleApplicationCredentials: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 		R2: proofstorage.R2Config{
 			AccountID:       os.Getenv("R2_ACCOUNT_ID"),
