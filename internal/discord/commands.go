@@ -8,7 +8,7 @@ type Command struct {
 }
 
 func (b *Bot) setupCommands() {
-	b.Handlers = make(map[string]Command)
+	b.handlers = make(map[string]Command)
 
 	b.registerCommand(b.setupLoggingChannelCommand())
 	b.registerCommand(b.exitCommand())
@@ -27,5 +27,5 @@ func (b *Bot) setupCommands() {
 }
 
 func (b *Bot) registerCommand(cmd Command) {
-	b.Handlers[cmd.Definition.Name] = cmd
+	b.handlers[cmd.Definition.Name] = cmd
 }

@@ -16,7 +16,6 @@ import (
 	"osrs-events/internal/logging"
 	"osrs-events/internal/osrs"
 	"osrs-events/internal/proofstorage"
-	"osrs-events/internal/scheduler"
 )
 
 func main() {
@@ -89,7 +88,7 @@ func main() {
 	}
 
 	// ─── Scheduler (rollover, hourly snapshots, pending starts) ───
-	sched := scheduler.New(db, bot.EventService, bot.SnapshotService, bot.LeaderboardService, bot.InitializerService, bot.Session)
+	sched := bot.Scheduler(db)
 	sched.Start()
 	defer sched.Stop()
 	log.Println("Scheduler started successfully")
