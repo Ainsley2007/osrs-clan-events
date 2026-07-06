@@ -49,7 +49,8 @@ The bot had grown a wide public `Bot` API, handlers calling `database.Store` dir
 - Route persistence through services (`GuildService`, `EventService`, etc.).
 - Use `requireAdmin` / `interactionActor` for guild command safety.
 - Use `goSafe` for deferred/async handler work so panics are logged.
-- Prefer `RefreshLeaderboards` over raw `Update*` calls when errors should be logged.
+- Prefer `RefreshLeaderboards` for command/rollover paths that change overall totals.
+- Hourly snapshot job updates **weekly** boards only (`UpdateWeeklyLeaderboard`); overall boards update on point awards (rollover, `/stop`, `/addpoints`).
 
 ### Config
 

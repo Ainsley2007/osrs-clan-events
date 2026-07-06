@@ -89,7 +89,12 @@ func (s *Scheduler) updateActiveSnapshots() {
 	s.processMissingAccountNotifications(ctx, now, result)
 
 	for guildID := range guildsMap {
-		s.leaderboardService.RefreshLeaderboards(ctx, guildID)
+		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw"); err != nil {
+			log.Printf("[Guild %s] Failed to update BOTW weekly leaderboard: %v", guildID, err)
+		}
+		if err := s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw"); err != nil {
+			log.Printf("[Guild %s] Failed to update SOTW weekly leaderboard: %v", guildID, err)
+		}
 	}
 }
 
