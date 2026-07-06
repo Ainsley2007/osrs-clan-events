@@ -89,8 +89,7 @@ func (s *Scheduler) updateActiveSnapshots() {
 	s.processMissingAccountNotifications(ctx, now, result)
 
 	for guildID := range guildsMap {
-		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw")
-		s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw")
+		s.leaderboardService.RefreshLeaderboards(ctx, guildID)
 	}
 }
 

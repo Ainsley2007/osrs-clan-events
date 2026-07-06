@@ -43,6 +43,7 @@ type SnapshotService interface {
 type LeaderboardService interface {
 	UpdateWeeklyLeaderboard(ctx context.Context, guildID string, eventType string) error
 	UpdateOverallLeaderboard(ctx context.Context, guildID string, eventType string) error
+	RefreshLeaderboards(ctx context.Context, guildID string)
 }
 
 type InitializerService interface {

@@ -131,6 +131,7 @@ func (m *mockCompletionLeaderboardService) UpdateWeeklyLeaderboard(context.Conte
 func (m *mockCompletionLeaderboardService) UpdateOverallLeaderboard(context.Context, string, string) error {
 	return nil
 }
+func (m *mockCompletionLeaderboardService) RefreshLeaderboards(context.Context, string) {}
 
 // mockCompletionInitializerService is a no-op.
 type mockCompletionInitializerService struct{}
