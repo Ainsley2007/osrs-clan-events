@@ -3,8 +3,8 @@ package proofstorage
 import "testing"
 
 func TestObjectKey(t *testing.T) {
-	if got := ObjectKey(4821, ".png"); got != "4821.png" {
-		t.Fatalf("ObjectKey() = %q, want 4821.png", got)
+	if got := objectKey(4821, ".png"); got != "4821.png" {
+		t.Fatalf("objectKey() = %q, want 4821.png", got)
 	}
 }
 
@@ -18,8 +18,8 @@ func TestPublicURL(t *testing.T) {
 		{"https://pub.example.r2.dev/", "4821.png", "https://pub.example.r2.dev/4821.png"},
 	}
 	for _, tc := range tests {
-		if got := PublicURL(tc.base, tc.key); got != tc.want {
-			t.Fatalf("PublicURL(%q, %q) = %q, want %q", tc.base, tc.key, got, tc.want)
+		if got := buildPublicURL(tc.base, tc.key); got != tc.want {
+			t.Fatalf("buildPublicURL(%q, %q) = %q, want %q", tc.base, tc.key, got, tc.want)
 		}
 	}
 }

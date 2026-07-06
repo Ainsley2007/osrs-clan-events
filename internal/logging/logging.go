@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
@@ -86,9 +85,4 @@ func (f writerFunc) Write(p []byte) (int, error) {
 
 func paint(line, code string) string {
 	return code + line + ansiReset
-}
-
-// Timestamp matches the historical stdlib log prefix for tests.
-func Timestamp() string {
-	return time.Now().Format(timeFormat)
 }

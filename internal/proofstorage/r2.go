@@ -86,7 +86,7 @@ func (s *R2Store) PersistFromURL(ctx context.Context, submissionID int64, source
 	}
 
 	ext := extensionFromResponse(sourceURL, contentType)
-	key := ObjectKey(submissionID, ext)
+	key := objectKey(submissionID, ext)
 
 	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
@@ -98,11 +98,11 @@ func (s *R2Store) PersistFromURL(ctx context.Context, submissionID int64, source
 		return "", fmt.Errorf("%w: upload failed: %v", ErrUnavailableProof, err)
 	}
 
-	return PublicURL(s.publicBaseURL, key), nil
+	return buildPublicURL(s.publicBaseURL, key), nil
 }
 
 // HealthCheck verifies credentials, bucket access, upload, and delete.
-func (s *R2Store) HealthCheck(ctx context.Context) (publicURL string, err error) {
+func (s *R2Store) HealthCheck(ctx context.Context) (sampleURL string, err error) {
 	if _, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(s.bucket),
 	}); err != nil {
@@ -127,7 +127,7 @@ func (s *R2Store) HealthCheck(ctx context.Context) (publicURL string, err error)
 		return "", fmt.Errorf("delete health check object: %w", err)
 	}
 
-	return PublicURL(s.publicBaseURL, healthCheckKey), nil
+	return buildPublicURL(s.publicBaseURL, healthCheckKey), nil
 }
 
 var minPNG = []byte{

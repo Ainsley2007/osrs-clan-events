@@ -7,10 +7,10 @@ import (
 )
 
 func TestFormatLeaderboardDisplayName(t *testing.T) {
-	if got := FormatLeaderboardDisplayName("Alice", nil); got != "Alice" {
+	if got := formatLeaderboardDisplayName("Alice", nil); got != "Alice" {
 		t.Fatalf("solo submitter: got %q", got)
 	}
-	if got := FormatLeaderboardDisplayName("Alice", []string{"Bob", "Charlie"}); got != "Alice, Bob, Charlie" {
+	if got := formatLeaderboardDisplayName("Alice", []string{"Bob", "Charlie"}); got != "Alice, Bob, Charlie" {
 		t.Fatalf("with teammates: got %q", got)
 	}
 }

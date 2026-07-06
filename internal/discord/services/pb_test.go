@@ -75,7 +75,7 @@ func TestRankPBLeaderboardPlaceRows_TiedFirstPlaceShowsFourPlayers(t *testing.T)
 		{DisplayName: "Diana", TimeText: "01:02.00", TimeCentiseconds: 6200, UpdatedAt: now.Add(3 * time.Minute)},
 	}
 
-	rows := RankPBLeaderboardPlaceRows(records)
+	rows := rankPBLeaderboardPlaceRows(records)
 	if len(rows) != 4 {
 		t.Fatalf("expected 4 visible rows, got %d", len(rows))
 	}
@@ -95,7 +95,7 @@ func TestRankPBLeaderboardPlaceRows_AllTiedFirstShowsOnlyGold(t *testing.T) {
 		{DisplayName: "Charlie", TimeCentiseconds: 6000, UpdatedAt: now.Add(2 * time.Minute)},
 	}
 
-	rows := RankPBLeaderboardPlaceRows(records)
+	rows := rankPBLeaderboardPlaceRows(records)
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 visible rows, got %d", len(rows))
 	}

@@ -72,7 +72,7 @@ func resolvePBTeammates(session *discordgo.Session, guildID, submitterID, raw st
 	return names, nil
 }
 
-func FormatLeaderboardDisplayName(submitter string, teammates []string) string {
+func formatLeaderboardDisplayName(submitter string, teammates []string) string {
 	submitter = strings.TrimSpace(submitter)
 	if len(teammates) == 0 {
 		return submitter

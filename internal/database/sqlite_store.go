@@ -13,6 +13,8 @@ type SQLiteStore struct {
 	db *sql.DB
 }
 
+var _ Store = (*SQLiteStore)(nil)
+
 func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	dsn := sqliteDSN(path)
 	db, err := sql.Open("sqlite", dsn)
