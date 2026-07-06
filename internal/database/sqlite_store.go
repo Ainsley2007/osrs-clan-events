@@ -15,7 +15,7 @@ type SQLiteStore struct {
 
 var _ Store = (*SQLiteStore)(nil)
 
-func NewSQLiteStore(path string) (*SQLiteStore, error) {
+func NewSQLiteStore(path string) (Store, error) {
 	dsn := sqliteDSN(path)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
