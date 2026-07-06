@@ -57,7 +57,7 @@ func (b *Bot) addAccountCommand() Command {
 		go func() {
 			ctx, cancel := cmdContext()
 			defer cancel()
-			result, err := b.AccountService.AddAccount(ctx, targetUser, i.GuildID, rsn)
+			result, err := b.accountService.AddAccount(ctx, targetUser, i.GuildID, rsn)
 				if err != nil {
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to add account: %v", err))
 					return

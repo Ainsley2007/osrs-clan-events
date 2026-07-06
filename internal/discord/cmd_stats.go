@@ -41,7 +41,7 @@ func (b *Bot) runStatsAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 	userID := i.Member.User.ID
 	guildID := i.GuildID
 
-	botwStats, sotwStats, err := b.StatsService.GetUserEventStats(ctx, userID, guildID)
+	botwStats, sotwStats, err := b.statsService.GetUserEventStats(ctx, userID, guildID)
 	if err != nil {
 		editDeferredWithError(s, i.Interaction, err)
 		return

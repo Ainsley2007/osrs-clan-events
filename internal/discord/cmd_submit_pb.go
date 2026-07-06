@@ -92,7 +92,7 @@ func (b *Bot) handleSubmitPB(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	ctx, cancel := cmdContext()
 	defer cancel()
-	submission, category, err := b.PBService.SubmitPB(ctx, &services.PBSubmissionInput{
+	submission, category, err := b.pbService.SubmitPB(ctx, &services.PBSubmissionInput{
 		GuildID:       i.GuildID,
 		CategorySlug:  categoryOpt.StringValue(),
 		DiscordUserID: userID,
@@ -118,7 +118,7 @@ func (b *Bot) handlePBCategoryAutocomplete(s *discordgo.Session, i *discordgo.In
 	ctx, cancel := cmdContext()
 	defer cancel()
 
-	categories, err := b.Store.GetActivePBCategories(ctx)
+	categories, err := b.pbService.GetActivePBCategories(ctx)
 	if err != nil {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionApplicationCommandAutocompleteResult,

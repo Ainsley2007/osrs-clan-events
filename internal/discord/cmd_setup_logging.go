@@ -50,7 +50,7 @@ func (b *Bot) setupLoggingChannelCommand() Command {
 
 			guildID := i.GuildID
 
-			if err := b.GuildService.UpdateLogChannel(ctx, guildID, channelID); err != nil {
+			if err := b.guildService.UpdateLogChannel(ctx, guildID, channelID); err != nil {
 				respondError(s, i.Interaction, err)
 				return
 			}

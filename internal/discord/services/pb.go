@@ -60,6 +60,10 @@ func NewPBService(store PBStore, proofStore proofstorage.Store, session *discord
 	return s
 }
 
+func (s *PBService) GetActivePBCategories(ctx context.Context) ([]*database.PBCategory, error) {
+	return s.store.GetActivePBCategories(ctx)
+}
+
 func IsPBSubmissionAlreadyReviewed(err error) bool {
 	return errors.Is(err, database.ErrPBSubmissionNotPending)
 }

@@ -58,7 +58,7 @@ func (b *Bot) removeCommand() Command {
 		go func() {
 			ctx, cancel := cmdContext()
 			defer cancel()
-			if err := b.AccountService.RemoveAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
+			if err := b.accountService.RemoveAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to remove account: %v", err))
 					return
 				}

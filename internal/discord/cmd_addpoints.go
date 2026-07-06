@@ -75,7 +75,7 @@ func (b *Bot) handleAddPoints(s *discordgo.Session, i *discordgo.InteractionCrea
 
 	ctx, cancel := cmdContext()
 	defer cancel()
-	err := b.ParticipantService.AddPoints(ctx, i.GuildID, targetUserID, eventType, amount)
+	err := b.participantService.AddPoints(ctx, i.GuildID, targetUserID, eventType, amount)
 	if err != nil {
 		if errors.Is(err, services.ErrParticipantNotFound) {
 			respondError(s, i.Interaction, errors.New("that user is not a participant in this server"))
@@ -91,7 +91,7 @@ func (b *Bot) handleAddPoints(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Added %s %s points to <@%s>.", formatPoints(int64(amount)), label, targetUserID))
 
-	b.LeaderboardService.RefreshLeaderboards(ctx, i.GuildID)
+	b.leaderboardService.RefreshLeaderboards(ctx, i.GuildID)
 
 	logMsg := fmt.Sprintf("➕ <@%s> added %s %s points to <@%s>.", i.Member.User.ID, formatPoints(int64(amount)), label, targetUserID)
 	b.logAction(ctx, i.GuildID, logMsg)

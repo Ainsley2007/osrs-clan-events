@@ -50,12 +50,12 @@ func (b *Bot) setupDonationChannelCommand() Command {
 
 			guildID := i.GuildID
 
-			if err := b.GuildService.UpdateDonationChannel(ctx, guildID, channelID); err != nil {
+			if err := b.guildService.UpdateDonationChannel(ctx, guildID, channelID); err != nil {
 				respondError(s, i.Interaction, err)
 				return
 			}
 
-			if err := b.DonationService.CreateOrUpdateLeaderboard(ctx, guildID); err != nil {
+			if err := b.donationService.CreateOrUpdateLeaderboard(ctx, guildID); err != nil {
 				respondError(s, i.Interaction, fmt.Errorf("failed to create leaderboard: %w", err))
 				return
 			}

@@ -64,13 +64,13 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	guild, err := b.Store.GetGuild(ctx, i.GuildID)
+	guild, err := b.guildService.GetGuild(ctx, i.GuildID)
 	if err != nil || guild.DonationChannelID == "" {
 		respondError(s, i.Interaction, errors.New("donation channel not configured. Use /setup-donation-channel first"))
 		return
 	}
 
-	err = b.DonationService.UseFunds(ctx, i.GuildID, amountGP, description, i.Member.User.ID)
+	err = b.donationService.UseFunds(ctx, i.GuildID, amountGP, description, i.Member.User.ID)
 	if err != nil {
 		respondError(s, i.Interaction, err)
 		return
@@ -82,7 +82,7 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 	respondSuccess(s, i.Interaction, fmt.Sprintf("✅ Used `%s` from clan fund%s.", formatAmountM(amountGP), descText))
 
-	if err := b.DonationService.UpdateLeaderboard(ctx, i.GuildID); err != nil {
+	if err := b.donationService.UpdateLeaderboard(ctx, i.GuildID); err != nil {
 		// Log error but don't fail the command
 		b.logger.Printf("Failed to update donation leaderboard: %v", err)
 	}

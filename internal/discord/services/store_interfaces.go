@@ -66,6 +66,9 @@ type LeaderboardStore interface {
 type GuildStore interface {
 	GetGuild(ctx context.Context, guildID string) (*database.Guild, error)
 	SaveGuild(ctx context.Context, guild *database.Guild) error
+	ListGuildIDs(ctx context.Context) ([]string, error)
+	DeleteGuild(ctx context.Context, guildID string) error
+	PurgeOrphanedEvents(ctx context.Context) (int, error)
 }
 
 // InitializerStore is the minimal persistence interface for guild initialization.

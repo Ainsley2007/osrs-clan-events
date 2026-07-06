@@ -66,7 +66,7 @@ func (b *Bot) renameCommand() Command {
 		go func() {
 			ctx, cancel := cmdContext()
 			defer cancel()
-			if err := b.AccountService.RenameAccount(ctx, targetUser, i.GuildID, currentRSN, newRSN); err != nil {
+			if err := b.accountService.RenameAccount(ctx, targetUser, i.GuildID, currentRSN, newRSN); err != nil {
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to rename account: %v", err))
 					return
 				}

@@ -45,47 +45,55 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 	ctx, cancel := cmdContext()
 	defer cancel()
 
-	activeBotwEvents, err := b.Store.GetActiveEvents(ctx, i.GuildID, "botw")
-	if err == nil && len(activeBotwEvents) > 0 {
+	botwRunning, err := b.eventService.IsEventRunning(ctx, i.GuildID, "botw")
+	if err != nil {
+		editDeferredWithError(s, i.Interaction, fmt.Errorf("failed to check BOTW status: %w", err))
+		return
+	}
+	if botwRunning {
 		editDeferredWithError(s, i.Interaction, errors.New("⏰ BOTW competition is already running! Use /stop first"))
 		return
 	}
-	activeSotwEvents, err := b.Store.GetActiveEvents(ctx, i.GuildID, "sotw")
-	if err == nil && len(activeSotwEvents) > 0 {
+	sotwRunning, err := b.eventService.IsEventRunning(ctx, i.GuildID, "sotw")
+	if err != nil {
+		editDeferredWithError(s, i.Interaction, fmt.Errorf("failed to check SOTW status: %w", err))
+		return
+	}
+	if sotwRunning {
 		editDeferredWithError(s, i.Interaction, errors.New("⏰ SOTW competition is already running! Use /stop first"))
 		return
 	}
 
 	startTime := time.Now().UTC()
 
-	botwResult, err := b.EventService.StartBotw(ctx, i.GuildID, startTime)
+	botwResult, err := b.eventService.StartBotw(ctx, i.GuildID, startTime)
 	if err != nil {
 		editDeferredWithError(s, i.Interaction, fmt.Errorf("failed to start BOTW: %w", err))
 		return
 	}
 
-	sotwResult, err := b.EventService.StartSotw(ctx, i.GuildID, startTime)
+	sotwResult, err := b.eventService.StartSotw(ctx, i.GuildID, startTime)
 	if err != nil {
 		editDeferredWithError(s, i.Interaction, fmt.Errorf("failed to start SOTW: %w", err))
 		return
 	}
 
 	// Update weekly and overall leaderboards (leaderboard service logs failures)
-	b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw")
-	b.LeaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw")
-	b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw")
-	b.LeaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw")
+	b.leaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw")
+	b.leaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw")
+	b.leaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw")
+	b.leaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw")
 
-	guild, err := b.Store.GetGuild(ctx, i.GuildID)
+	guild, err := b.guildService.GetGuild(ctx, i.GuildID)
 	if err == nil {
-		if err := b.InitializerService.RenameCategoryForEvent(ctx, guild, "botw", botwResult.Event); err != nil {
+		if err := b.initializerService.RenameCategoryForEvent(ctx, guild, "botw", botwResult.Event); err != nil {
 			log.Printf("Failed to rename BOTW category: %v", err)
 		}
-		if err := b.InitializerService.RenameCategoryForEvent(ctx, guild, "sotw", sotwResult.Event); err != nil {
+		if err := b.initializerService.RenameCategoryForEvent(ctx, guild, "sotw", sotwResult.Event); err != nil {
 			log.Printf("Failed to rename SOTW category: %v", err)
 		}
 		if guild.LogChannelID != "" {
-			SendCompetitionStartedLog(s, guild.LogChannelID, botwResult.MetricName, sotwResult.MetricName,
+			sendCompetitionStartedLog(s, guild.LogChannelID, botwResult.MetricName, sotwResult.MetricName,
 				botwResult.Event.WeekNumber, sotwResult.Event.WeekNumber, i.Member.User.ID)
 		}
 

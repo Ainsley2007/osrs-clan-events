@@ -41,7 +41,7 @@ func (b *Bot) exitCommand() Command {
 		go func() {
 			ctx, cancel := cmdContext()
 			defer cancel()
-			if err := b.AccountService.ExitCompetition(ctx, targetUser, i.GuildID); err != nil {
+			if err := b.accountService.ExitCompetition(ctx, targetUser, i.GuildID); err != nil {
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to leave competitions: %v", err))
 					return
 				}

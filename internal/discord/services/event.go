@@ -204,6 +204,10 @@ func (s *EventService) GetActiveEvent(ctx context.Context, guildID, eventType st
 	return s.store.GetActiveEvent(ctx, guildID, eventType)
 }
 
+func (s *EventService) GetActiveEvents(ctx context.Context, guildID, eventType string) ([]*database.Event, error) {
+	return s.store.GetActiveEvents(ctx, guildID, eventType)
+}
+
 func (s *EventService) GetNextWeekNumber(ctx context.Context, guildID, eventType string) (int, error) {
 	events, err := s.store.GetAllEventsByGuildAndType(ctx, guildID, eventType)
 	if err != nil {
