@@ -31,11 +31,11 @@ func (b *Bot) messageReactionAdd(s *discordgo.Session, event *discordgo.MessageR
 	userID := event.UserID
 
 	if emoji == services.PBRejectEmoji {
-		go b.runPBRejectionFollowUp(s, guildID, channelID, messageID, userID)
+		goSafe("pb-reject", func() { b.runPBRejectionFollowUp(s, guildID, channelID, messageID, userID) })
 		return
 	}
 
-	go b.runPBApprovalFollowUp(guildID, channelID, messageID, userID)
+	goSafe("pb-approve", func() { b.runPBApprovalFollowUp(guildID, channelID, messageID, userID) })
 }
 
 func (b *Bot) runPBApprovalFollowUp(guildID, channelID, messageID, userID string) {

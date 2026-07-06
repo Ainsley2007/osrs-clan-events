@@ -33,28 +33,30 @@ func (b *Bot) exitCommand() Command {
 				return
 			}
 
+			actorID, _ := interactionActorID(i)
+
 			if err := respondDeferred(s, i.Interaction, "⏳ Leaving competitions..."); err != nil {
 				log.Printf("Failed to defer exit interaction: %v", err)
 				return
 			}
 
-		go func() {
-			ctx, cancel := cmdContext()
-			defer cancel()
-			if err := b.accountService.ExitCompetition(ctx, targetUser, i.GuildID); err != nil {
+			goSafe("exit-competition", func() {
+				ctx, cancel := cmdContext()
+				defer cancel()
+				if err := b.accountService.ExitCompetition(ctx, targetUser, i.GuildID); err != nil {
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to leave competitions: %v", err))
 					return
 				}
 
 				if isOtherUser {
 					user, _ := s.User(targetUser)
-					b.logAction(ctx, i.GuildID, fmt.Sprintf("🚪 <@%s> removed <@%s> from competitions", i.Member.User.ID, user.ID))
+					b.logAction(ctx, i.GuildID, fmt.Sprintf("🚪 <@%s> removed <@%s> from competitions", actorID, user.ID))
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Removed <@%s> from all competitions.", targetUser))
 				} else {
 					b.logAction(ctx, i.GuildID, fmt.Sprintf("🚪 <@%s> left all competitions", targetUser))
 					editDeferredContent(s, i.Interaction, "✅ Left all competitions.")
 				}
-			}()
+			})
 		},
 	}
 }

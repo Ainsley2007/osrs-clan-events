@@ -50,28 +50,30 @@ func (b *Bot) removeCommand() Command {
 				return
 			}
 
+			actorID, _ := interactionActorID(i)
+
 			if err := respondDeferred(s, i.Interaction, "⏳ Removing account..."); err != nil {
 				log.Printf("Failed to defer remove interaction: %v", err)
 				return
 			}
 
-		go func() {
-			ctx, cancel := cmdContext()
-			defer cancel()
-			if err := b.accountService.RemoveAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
+			goSafe("remove-account", func() {
+				ctx, cancel := cmdContext()
+				defer cancel()
+				if err := b.accountService.RemoveAccount(ctx, targetUser, i.GuildID, rsn); err != nil {
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to remove account: %v", err))
 					return
 				}
 
 				if isOtherUser {
 					user, _ := s.User(targetUser)
-					b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s` from <@%s>", i.Member.User.ID, rsn, user.ID))
+					b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s` from <@%s>", actorID, rsn, user.ID))
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Removed RSN `%s` from <@%s>.", rsn, targetUser))
 				} else {
 					b.logAction(ctx, i.GuildID, fmt.Sprintf("➖ <@%s> removed account `%s`", targetUser, rsn))
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Removed RSN `%s`.", rsn))
 				}
-			}()
+			})
 		},
 	}
 }

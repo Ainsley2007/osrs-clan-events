@@ -108,8 +108,8 @@ func (b *Bot) Stop() error {
 
 func (b *Bot) ready(s *discordgo.Session, event *discordgo.Ready) {
 	log.Printf("Logged in as: %v#%v", s.State.User.Username, s.State.User.Discriminator)
-	go b.cleanupRemovedGuilds(event)
-	go b.initializeAllGuilds()
+	goSafe("guild-cleanup", func() { b.cleanupRemovedGuilds(event) })
+	goSafe("initialize-all-guilds", b.initializeAllGuilds)
 }
 
 func (b *Bot) interactionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -202,7 +202,7 @@ func (b *Bot) handleRSNAutocomplete(s *discordgo.Session, i *discordgo.Interacti
 
 func (b *Bot) guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
 	log.Printf("Guild event received: %s (%s)", event.Guild.Name, event.Guild.ID)
-	go b.initializeGuildAsync(event.Guild.ID)
+	goSafe("guild-init", func() { b.initializeGuildAsync(event.Guild.ID) })
 }
 
 func (b *Bot) initializeGuildAsync(guildID string) {
@@ -231,6 +231,6 @@ func (b *Bot) initializeGuildAsync(guildID string) {
 func (b *Bot) initializeAllGuilds() {
 	log.Println("Initializing all guilds...")
 	for _, guild := range b.session.State.Guilds {
-		go b.initializeGuildAsync(guild.ID)
+		goSafe("guild-init", func() { b.initializeGuildAsync(guild.ID) })
 	}
 }

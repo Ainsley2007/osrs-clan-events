@@ -37,7 +37,7 @@ func (b *Bot) handleStart(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		return
 	}
 
-	go b.runStartAndEditReply(s, i)
+	goSafe("start", func() { b.runStartAndEditReply(s, i) })
 }
 
 func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.InteractionCreate) {

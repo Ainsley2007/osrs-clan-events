@@ -31,7 +31,7 @@ func (b *Bot) handleStats(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		return
 	}
 
-	go b.runStatsAndEditReply(s, i)
+	goSafe("stats", func() { b.runStatsAndEditReply(s, i) })
 }
 
 func (b *Bot) runStatsAndEditReply(s *discordgo.Session, i *discordgo.InteractionCreate) {

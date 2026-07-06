@@ -58,28 +58,30 @@ func (b *Bot) renameCommand() Command {
 				return
 			}
 
+			actorID, _ := interactionActorID(i)
+
 			if err := respondDeferred(s, i.Interaction, "⏳ Renaming account..."); err != nil {
 				log.Printf("Failed to defer rename interaction: %v", err)
 				return
 			}
 
-		go func() {
-			ctx, cancel := cmdContext()
-			defer cancel()
-			if err := b.accountService.RenameAccount(ctx, targetUser, i.GuildID, currentRSN, newRSN); err != nil {
+			goSafe("rename-account", func() {
+				ctx, cancel := cmdContext()
+				defer cancel()
+				if err := b.accountService.RenameAccount(ctx, targetUser, i.GuildID, currentRSN, newRSN); err != nil {
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("❌ Failed to rename account: %v", err))
 					return
 				}
 
 				if isOtherUser {
 					user, _ := s.User(targetUser)
-					b.logAction(ctx, i.GuildID, fmt.Sprintf("✏️ <@%s> renamed account `%s` → `%s` for <@%s>", i.Member.User.ID, currentRSN, newRSN, user.ID))
+					b.logAction(ctx, i.GuildID, fmt.Sprintf("✏️ <@%s> renamed account `%s` → `%s` for <@%s>", actorID, currentRSN, newRSN, user.ID))
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Renamed `%s` to `%s` for <@%s>.", currentRSN, newRSN, targetUser))
 				} else {
 					b.logAction(ctx, i.GuildID, fmt.Sprintf("✏️ <@%s> renamed account `%s` → `%s`", targetUser, currentRSN, newRSN))
 					editDeferredContent(s, i.Interaction, fmt.Sprintf("✅ Renamed `%s` to `%s`.", currentRSN, newRSN))
 				}
-			}()
+			})
 		},
 	}
 }

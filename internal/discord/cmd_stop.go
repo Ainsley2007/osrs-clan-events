@@ -62,7 +62,7 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	})
 
 	// Do heavy work asynchronously (completing events, leaderboard updates, logging)
-	go func() {
+	goSafe("stop", func() {
 		ctx, cancel := cmdContext()
 		defer cancel()
 		var botwPointsAwarded, sotwPointsAwarded int
@@ -106,5 +106,5 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if err == nil && guild.LogChannelID != "" {
 			sendCompetitionStoppedLog(s, guild.LogChannelID, stoppedEvents, botwPointsAwarded, sotwPointsAwarded, stoppedBy)
 		}
-	}()
+	})
 }
