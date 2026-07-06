@@ -159,9 +159,15 @@ func (b *Bot) handleRSNAutocomplete(s *discordgo.Session, i *discordgo.Interacti
 	ctx, cancel := cmdContext()
 	defer cancel()
 
-	userID := i.Member.User.ID
-	if userID == "" && i.User != nil {
-		userID = i.User.ID
+	userID, ok := interactionActorID(i)
+	if !ok {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+			Data: &discordgo.InteractionResponseData{
+				Choices: []*discordgo.ApplicationCommandOptionChoice{},
+			},
+		})
+		return
 	}
 
 	accounts, err := b.accountService.GetTrackedAccounts(ctx, userID)

@@ -20,7 +20,12 @@ func (b *Bot) stopCommand() Command {
 }
 
 func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if !hasAdminPermission(s, i.GuildID, i.Member.User.ID) {
+	actor, ok := interactionActor(i)
+	if !ok {
+		respondError(s, i.Interaction, errors.New("could not resolve command user"))
+		return
+	}
+	if !hasAdminPermission(s, i.GuildID, actor.ID) {
 		respondError(s, i.Interaction, errors.New("you must be an administrator to use this command"))
 		return
 	}
@@ -90,9 +95,14 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			b.leaderboardService.RefreshLeaderboards(ctx, i.GuildID)
 		}
 
+		stoppedBy := ""
+		if actor, ok := interactionActor(i); ok {
+			stoppedBy = actor.ID
+		}
+
 		guild, err := b.guildService.GetGuild(ctx, i.GuildID)
 		if err == nil && guild.LogChannelID != "" {
-			sendCompetitionStoppedLog(s, guild.LogChannelID, stoppedEvents, botwPointsAwarded, sotwPointsAwarded, i.Member.User.ID)
+			sendCompetitionStoppedLog(s, guild.LogChannelID, stoppedEvents, botwPointsAwarded, sotwPointsAwarded, stoppedBy)
 		}
 	}()
 }
