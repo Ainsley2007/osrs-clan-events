@@ -86,14 +86,8 @@ func (b *Bot) handleStop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			sotwPointsAwarded = count
 		}
 
-		// Update weekly and overall leaderboards (leaderboard service logs failures)
-		if len(activeBotwEvents) > 0 {
-			b.leaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw")
-			b.leaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw")
-		}
-		if len(activeSotwEvents) > 0 {
-			b.leaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw")
-			b.leaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw")
+		if len(activeBotwEvents) > 0 || len(activeSotwEvents) > 0 {
+			b.leaderboardService.RefreshLeaderboards(ctx, i.GuildID)
 		}
 
 		guild, err := b.guildService.GetGuild(ctx, i.GuildID)

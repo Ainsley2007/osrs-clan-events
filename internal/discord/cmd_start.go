@@ -81,11 +81,7 @@ func (b *Bot) runStartAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 		return
 	}
 
-	// Update weekly and overall leaderboards (leaderboard service logs failures)
-	b.leaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "botw")
-	b.leaderboardService.UpdateWeeklyLeaderboard(ctx, i.GuildID, "sotw")
-	b.leaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "botw")
-	b.leaderboardService.UpdateOverallLeaderboard(ctx, i.GuildID, "sotw")
+	b.leaderboardService.RefreshLeaderboards(ctx, i.GuildID)
 
 	guild, err := b.guildService.GetGuild(ctx, i.GuildID)
 	if err == nil {

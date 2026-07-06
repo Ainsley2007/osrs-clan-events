@@ -349,12 +349,8 @@ func (s *InitializerService) ensureMessage(ctx context.Context, guildID, dashboa
 	return true, nil
 }
 
-// refreshLeaderboards is best-effort; individual failures are logged by the leaderboard service.
 func (s *InitializerService) refreshLeaderboards(ctx context.Context, guildID string) {
-	s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "botw")
-	s.leaderboardService.UpdateWeeklyLeaderboard(ctx, guildID, "sotw")
-	s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "botw")
-	s.leaderboardService.UpdateOverallLeaderboard(ctx, guildID, "sotw")
+	s.leaderboardService.RefreshLeaderboards(ctx, guildID)
 }
 
 func (s *InitializerService) ensurePBLeaderboardMessages(ctx context.Context, guild *database.Guild) (bool, error) {
