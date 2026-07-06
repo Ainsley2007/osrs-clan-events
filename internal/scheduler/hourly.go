@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"osrs-events/internal/database"
-	"osrs-events/internal/discord"
 	"osrs-events/internal/discord/services"
 	"osrs-events/internal/osrs"
 )
@@ -125,7 +124,7 @@ func (s *Scheduler) processMissingAccountNotifications(ctx context.Context, now 
 		log.Printf("Failed to load pending missing account DMs: %v", err)
 	} else {
 		for _, pending := range pendingDMs {
-			if err := discord.SendAccountNotFoundDM(s.session, pending.DiscordUserID, pending.GuildID, pending.RSN); err != nil {
+			if err := s.notifier.SendAccountNotFoundDM(pending.DiscordUserID, pending.GuildID, pending.RSN); err != nil {
 				log.Printf("Failed to send missing account DM for account %d (%s): %v", pending.AccountID, pending.RSN, err)
 				continue
 			}
