@@ -38,8 +38,8 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 		respondError(s, i.Interaction, errors.New("this command can only be used in a server"))
 		return
 	}
-	if !hasAdminPermission(s, i.GuildID, i.Member.User.ID) {
-		respondError(s, i.Interaction, errors.New("you must be an administrator to use this command"))
+	actor, ok := requireAdmin(s, i)
+	if !ok {
 		return
 	}
 
@@ -70,7 +70,7 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	err = b.donationService.UseFunds(ctx, i.GuildID, amountGP, description, i.Member.User.ID)
+	err = b.donationService.UseFunds(ctx, i.GuildID, amountGP, description, actor.ID)
 	if err != nil {
 		respondError(s, i.Interaction, err)
 		return
@@ -87,6 +87,6 @@ func (b *Bot) handleUseFunds(s *discordgo.Session, i *discordgo.InteractionCreat
 		b.logger.Printf("Failed to update donation leaderboard: %v", err)
 	}
 
-	logMsg := fmt.Sprintf("➖ <@%s> used `%s` from clan fund%s.", i.Member.User.ID, formatAmountM(amountGP), descText)
+	logMsg := fmt.Sprintf("➖ <@%s> used `%s` from clan fund%s.", actor.ID, formatAmountM(amountGP), descText)
 	b.logAction(ctx, i.GuildID, logMsg)
 }

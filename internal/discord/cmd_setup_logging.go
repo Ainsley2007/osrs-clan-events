@@ -26,8 +26,7 @@ func (b *Bot) setupLoggingChannelCommand() Command {
 				respondError(s, i.Interaction, fmt.Errorf("this command can only be used in a server"))
 				return
 			}
-			if !hasAdminPermission(s, i.GuildID, i.Member.User.ID) {
-				respondError(s, i.Interaction, fmt.Errorf("you must be an administrator to use this command"))
+			if _, ok := requireAdmin(s, i); !ok {
 				return
 			}
 

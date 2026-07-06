@@ -38,7 +38,11 @@ func (b *Bot) runStatsAndEditReply(s *discordgo.Session, i *discordgo.Interactio
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	userID := i.Member.User.ID
+	userID, ok := interactionActorID(i)
+	if !ok {
+		editDeferredWithError(s, i.Interaction, fmt.Errorf("could not resolve command user"))
+		return
+	}
 	guildID := i.GuildID
 
 	botwStats, sotwStats, err := b.statsService.GetUserEventStats(ctx, userID, guildID)

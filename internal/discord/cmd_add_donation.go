@@ -38,8 +38,8 @@ func (b *Bot) handleAddDonation(s *discordgo.Session, i *discordgo.InteractionCr
 		respondError(s, i.Interaction, errors.New("this command can only be used in a server"))
 		return
 	}
-	if !hasAdminPermission(s, i.GuildID, i.Member.User.ID) {
-		respondError(s, i.Interaction, errors.New("you must be an administrator to use this command"))
+	actor, ok := requireAdmin(s, i)
+	if !ok {
 		return
 	}
 
@@ -76,7 +76,7 @@ func (b *Bot) handleAddDonation(s *discordgo.Session, i *discordgo.InteractionCr
 		return
 	}
 
-	err = b.donationService.AddDonation(ctx, i.GuildID, targetUserID, amountGP, i.Member.User.ID)
+	err = b.donationService.AddDonation(ctx, i.GuildID, targetUserID, amountGP, actor.ID)
 	if err != nil {
 		respondError(s, i.Interaction, fmt.Errorf("failed to add donation: %w", err))
 		return
@@ -89,6 +89,6 @@ func (b *Bot) handleAddDonation(s *discordgo.Session, i *discordgo.InteractionCr
 		b.logger.Printf("Failed to update donation leaderboard: %v", err)
 	}
 
-	logMsg := fmt.Sprintf("➕ <@%s> added `%s` to clan fund from <@%s>.", i.Member.User.ID, formatAmountM(amountGP), targetUserID)
+	logMsg := fmt.Sprintf("➕ <@%s> added `%s` to clan fund from <@%s>.", actor.ID, formatAmountM(amountGP), targetUserID)
 	b.logAction(ctx, i.GuildID, logMsg)
 }

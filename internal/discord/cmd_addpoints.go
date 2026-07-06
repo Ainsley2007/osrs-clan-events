@@ -50,8 +50,8 @@ func (b *Bot) handleAddPoints(s *discordgo.Session, i *discordgo.InteractionCrea
 		respondError(s, i.Interaction, errors.New("this command can only be used in a server"))
 		return
 	}
-	if !hasAdminPermission(s, i.GuildID, i.Member.User.ID) {
-		respondError(s, i.Interaction, errors.New("you must be an administrator to use this command"))
+	actor, ok := requireAdmin(s, i)
+	if !ok {
 		return
 	}
 
@@ -93,7 +93,7 @@ func (b *Bot) handleAddPoints(s *discordgo.Session, i *discordgo.InteractionCrea
 
 	b.leaderboardService.RefreshLeaderboards(ctx, i.GuildID)
 
-	logMsg := fmt.Sprintf("➕ <@%s> added %s %s points to <@%s>.", i.Member.User.ID, formatPoints(int64(amount)), label, targetUserID)
+	logMsg := fmt.Sprintf("➕ <@%s> added %s %s points to <@%s>.", actor.ID, formatPoints(int64(amount)), label, targetUserID)
 	b.logAction(ctx, i.GuildID, logMsg)
 }
 
